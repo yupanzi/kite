@@ -25,6 +25,15 @@ on:
     # 04:23 Asia/Shanghai (20:23 UTC).
     - cron: '23 20 * * *'
   workflow_dispatch:
+    inputs:
+      upstream_url:
+        description: 'Override upstream repo URL (sync rehearsal only)'
+        required: false
+        default: 'https://github.com/kite-org/kite.git'
+      upstream_branch:
+        description: 'Override upstream branch (sync rehearsal only)'
+        required: false
+        default: 'main'
 
 permissions:
   contents: read
@@ -34,7 +43,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  UPSTREAM_URL: https://github.com/kite-org/kite.git
+  UPSTREAM_URL: ${{ inputs.upstream_url || 'https://github.com/kite-org/kite.git' }}
+  UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
 
 jobs:
   sync:
@@ -49,7 +59,7 @@ jobs:
           token: ${{ secrets.SYNC_TOKEN }}
 
       - name: Fetch upstream main
-        run: git fetch --no-tags "$UPSTREAM_URL" "+main:refs/remotes/upstream/main"
+        run: git fetch --no-tags "$UPSTREAM_URL" "+${UPSTREAM_BRANCH}:refs/remotes/upstream/main"
 
       - name: Mirror upstream main -> fork main
         run: git push --force origin "refs/remotes/upstream/main:refs/heads/main"
