@@ -13,7 +13,7 @@ import (
 )
 
 func toOpenAIMessages(systemPrompt string, chatMessages []ChatMessage) []openai.ChatCompletionMessageParamUnion {
-	normalized := normalizeChatMessages(chatMessages)
+	normalized := normalizeChatMessages(chatMessages, openAILimits)
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(normalized)+1)
 	messages = append(messages, openai.SystemMessage(systemPrompt))
 
@@ -21,6 +21,22 @@ func toOpenAIMessages(systemPrompt string, chatMessages []ChatMessage) []openai.
 		switch msg.Role {
 		case "assistant":
 			messages = append(messages, openai.AssistantMessage(msg.Content))
+		case "tool":
+			// Rebuild the structured pair: an assistant message carrying the
+			// tool_call, followed by a tool message carrying its result.
+			result := msg.ToolResult
+			if msg.IsError {
+				// OpenAI has no is_error field; the live loop signals failure by
+				// prefixing the content, so replayed errors must match or the
+				// model reads a failed tool as successful.
+				result = "Tool error: " + result
+			}
+			messages = append(messages, streamedToolCallsToAssistantMessage([]streamedToolCall{{
+				ID:        msg.ToolCallID,
+				Name:      msg.ToolName,
+				Arguments: toolArgsJSON(msg.ToolArgs),
+			}}))
+			messages = append(messages, openai.ToolMessage(result, msg.ToolCallID))
 		default:
 			messages = append(messages, openai.UserMessage(msg.Content))
 		}
@@ -49,6 +65,7 @@ func (a *Agent) continueChatOpenAI(c *gin.Context, session pendingSession, sendE
 
 func (a *Agent) continueChatOpenAIWithToolResult(c *gin.Context, session pendingSession, result string, isError bool, sendEvent func(SSEEvent)) error {
 	ctx := c.Request.Context()
+	result = truncateWithNotice(result, maxOpenAIToolResultChars, "tool result "+session.ToolCall.Name)
 	sendEvent(SSEEvent{
 		Event: "tool_result",
 		Data:  buildToolResultEventData(session.ToolCall.ID, session.ToolCall.Name, result, isError),
@@ -80,6 +97,10 @@ func (a *Agent) runOpenAIConversation(
 			ToolChoice: openai.ChatCompletionToolChoiceOptionUnionParam{
 				OfAuto: openai.String("auto"),
 			},
+			// Serialize tool calls — the pause/resume confirmation flow carries
+			// one pending tool per turn (see the Anthropic path for the same
+			// constraint).
+			ParallelToolCalls:   openai.Bool(false),
 			MaxCompletionTokens: openai.Int(int64(a.maxTokens)),
 		})
 		messageContent, refusal, thinkingContent, streamedToolCalls, err := consumeStreamingResponse(stream, sendEvent)
@@ -186,6 +207,9 @@ func (a *Agent) runOpenAIConversation(
 			}
 
 			result, isError := ExecuteTool(ctx, c, a.cs, toolName, args)
+			// Cap the live result the same way replayed history is capped; see
+			// the Anthropic path for why the per-tool bounds are not sufficient.
+			result = truncateWithNotice(result, maxOpenAIToolResultChars, "tool result "+toolName)
 
 			sendEvent(SSEEvent{
 				Event: "tool_result",

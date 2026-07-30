@@ -497,9 +497,23 @@ export function useAIChat() {
       for (const message of messagesRef.current) {
         if (message.role === 'user' || message.role === 'assistant') {
           history.push({ role: message.role, content: message.content })
-        } else if (message.role === 'tool' && message.toolResult) {
-          const toolSummary = `[Tool: ${message.toolName}]\nResult: ${message.toolResult}`
-          history.push({ role: 'assistant', content: toolSummary })
+        } else if (
+          message.role === 'tool' &&
+          message.toolCallId &&
+          message.toolResult
+        ) {
+          // Send the tool round-trip structurally. The backend rebuilds a real
+          // tool_use + tool_result pair from this. Tool messages without a
+          // result (denied/cancelled/pending) are skipped to avoid a dangling
+          // tool_use with no matching tool_result.
+          history.push({
+            role: 'tool',
+            tool_call_id: message.toolCallId,
+            tool_name: message.toolName ?? '',
+            tool_args: message.toolArgs,
+            tool_result: message.toolResult,
+            is_error: message.actionStatus === 'error',
+          })
         }
       }
 
