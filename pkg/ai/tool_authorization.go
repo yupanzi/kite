@@ -136,6 +136,42 @@ func requiredToolPermissions(ctx context.Context, cs *cluster.ClientSet, toolNam
 			Verb:      string(common.VerbGet),
 			Namespace: common.AllNamespaces,
 		}}, nil
+	case "list_helm_releases":
+		namespace, _ := args["namespace"].(string)
+		if namespace = strings.TrimSpace(namespace); namespace == "" {
+			namespace = common.AllNamespaces
+		}
+		return []toolPermission{{
+			Resource:  string(common.HelmReleases),
+			Verb:      string(common.VerbGet),
+			Namespace: namespace,
+		}}, nil
+	case "get_helm_release", "get_helm_release_history",
+		"update_helm_release_values", "rollback_helm_release", "uninstall_helm_release":
+		if _, err := getRequiredString(args, "name"); err != nil {
+			return nil, err
+		}
+		namespace, err := getRequiredString(args, "namespace")
+		if err != nil {
+			return nil, err
+		}
+		// "_all" would be checked literally against RBAC patterns while helm
+		// storage maps it to cluster-wide, bypassing namespace deny rules.
+		if namespace == common.AllNamespaces {
+			return nil, fmt.Errorf("namespace must be a specific namespace")
+		}
+		verb := common.VerbGet
+		switch toolName {
+		case "update_helm_release_values", "rollback_helm_release":
+			verb = common.VerbUpdate
+		case "uninstall_helm_release":
+			verb = common.VerbDelete
+		}
+		return []toolPermission{{
+			Resource:  string(common.HelmReleases),
+			Verb:      string(verb),
+			Namespace: namespace,
+		}}, nil
 	default:
 		return nil, nil
 	}
@@ -203,6 +239,18 @@ func ExecuteTool(ctx context.Context, c *gin.Context, cs *cluster.ClientSet, too
 		return executeDeleteResource(ctx, cs, user, args)
 	case "query_prometheus":
 		return executeQueryPrometheus(ctx, cs, args)
+	case "list_helm_releases":
+		return executeListHelmReleases(ctx, cs, user, args)
+	case "get_helm_release":
+		return executeGetHelmRelease(ctx, cs, args)
+	case "get_helm_release_history":
+		return executeGetHelmReleaseHistory(ctx, cs, args)
+	case "update_helm_release_values":
+		return executeUpdateHelmReleaseValues(ctx, cs, user, args)
+	case "rollback_helm_release":
+		return executeRollbackHelmRelease(ctx, cs, user, args)
+	case "uninstall_helm_release":
+		return executeUninstallHelmRelease(ctx, cs, user, args)
 	default:
 		return fmt.Sprintf("Unknown tool: %s", toolName), true
 	}

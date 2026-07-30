@@ -97,8 +97,8 @@ func executeGetResource(ctx context.Context, cs *cluster.ClientSet, args map[str
 	return string(yamlBytes), false
 }
 
-// redactedValuePlaceholder replaces sensitive payloads (Secret data) before a
-// tool result is handed to the model.
+// redactedValuePlaceholder replaces sensitive payloads (Secret data, helm
+// values) before a tool result is handed to the model.
 const redactedValuePlaceholder = "***"
 
 // redactSensitiveResourceData masks value payloads before a resource body is
