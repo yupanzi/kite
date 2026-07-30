@@ -1,0 +1,20 @@
+# Build context excludes — added to speed up `docker build`.
+#
+# DO NOT add `bin/` here. The release image is built from Dockerfile.binary,
+# whose `COPY bin/kite-$TARGETARCH ./kite` reads the prebuilt binary from THIS
+# context. If bin/ is excluded, Kaniko does not fail — it logs "No files to
+# copy" and silently ships an image WITHOUT /app/kite, so the pod crash-loops
+# with `exec: "/app/kite": no such file or directory` (StartError, exitCode 128).
+# (`static`/`kite` are safe to exclude: the frontend is embedded into the binary
+# via go:embed, so Dockerfile.binary needs only bin/kite-$TARGETARCH.)
+**/node_modules
+ui/dist
+static
+kite
+*.db
+.git
+.github
+e2e
+docs
+test-results
+*.log

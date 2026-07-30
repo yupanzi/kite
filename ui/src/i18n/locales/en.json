@@ -120,6 +120,7 @@
       "kernelVersion": "Kernel Version",
       "key": "Key",
       "keys": "Keys",
+      "kind": "Kind",
       "kubeProxyVersion": "Kube Proxy Version",
       "kubeletVersion": "Kubelet Version",
       "labels": "Labels",
@@ -380,6 +381,12 @@
     "unsetGlobalError": "Failed to disable global sidebar",
     "updateAvailable": "A newer Kite version is available"
   },
+  "policies": {
+    "searchPlaceholder": "Search policies...",
+    "allKinds": "All kinds",
+    "empty": "No policies found",
+    "partialError": "Some policy types failed to load; the list may be incomplete."
+  },
   "nav": {
     "overview": "Overview",
     "pods": "Pods",
@@ -440,6 +447,7 @@
     "podgroups": "PodGroups",
     "flowschemas": "FlowSchemas",
     "prioritylevelconfigurations": "PriorityLevelConfigurations",
+    "policies": "Policies",
     "validatingadmissionpolicies": "ValidatingAdmissionPolicies",
     "validatingadmissionpolicybindings": "ValidatingAdmissionPolicyBindings",
     "validatingwebhookconfigurations": "ValidatingWebhookConfigurations",
@@ -762,7 +770,10 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "Leave empty to keep current API Key",
         "baseUrl": "Base URL",
-        "maxTokens": "Max Tokens"
+        "maxTokens": "Max Tokens",
+        "maxTokensHint": "Ceiling on a single response. On Claude models thinking and answer share this budget, so a small value truncates the answer.",
+        "effort": "Reasoning Effort",
+        "effortHint": "How much the model reasons and how many tools it uses. Higher costs more tokens; xhigh suits cluster troubleshooting."
       }
     },
     "kubectl": {
@@ -1151,7 +1162,6 @@
       "sources": "Sources",
       "keywords": "Keywords",
       "versions": "Versions",
-      "defaultValues": "Default values",
       "customValues": "Custom values",
       "updatedAt": "Updated"
     },
@@ -1197,7 +1207,9 @@
       "dryRun": "Dry Run",
       "upgrade": "Upgrade",
       "rollback": "Rollback",
-      "autoUpgrade": "Auto upgrade"
+      "autoUpgrade": "Auto upgrade",
+      "view": "View",
+      "compareValues": "Compare values"
     },
     "fields": {
       "chart": "Chart",
@@ -1208,6 +1220,11 @@
       "releaseName": "Release Name",
       "createNamespace": "Create namespace",
       "dryRunPreview": "Dry run preview",
+      "compareAgainst": "Compare against",
+      "deployedValues": "Deployed values",
+      "packageValues": "Package values",
+      "highlightChanges": "Highlight changes",
+      "sideBySide": "Side-by-side",
       "ignoreLabelsAnnotationsChanges": "Ignore labels/annotations changes (diff only)",
       "forceConflicts": "force-conflicts",
       "wait": "wait",
@@ -1269,7 +1286,8 @@
       "invalidAutoUpgradeInterval": "Interval must be at least 1 minute.",
       "invalidAutoUpgradeScheduleTime": "Enter a valid time.",
       "invalidAutoUpgradeTimeout": "Timeout must be at least 1 minute.",
-      "autoUpgradeChartRequired": "Select a chart for auto upgrade."
+      "autoUpgradeChartRequired": "Select a chart for auto upgrade.",
+      "noValueChanges": "No changes from the currently deployed values."
     },
     "placeholders": {
       "selectChart": "Select a chart..."

@@ -12,12 +12,12 @@ import (
 )
 
 func TestNormalizeChatMessages(t *testing.T) {
-	longContent := strings.Repeat("a", maxMessageChars+10)
-	messages := make([]ChatMessage, 0, maxConversationMessages+2)
+	longContent := strings.Repeat("a", maxOpenAIMessageChars+10)
+	messages := make([]ChatMessage, 0, maxOpenAIConversationMessages+2)
 	messages = append(messages, ChatMessage{Role: "user", Content: "   "})
-	for i := 0; i < maxConversationMessages+1; i++ {
+	for i := 0; i < maxOpenAIConversationMessages+1; i++ {
 		content := "  hello  "
-		if i == maxConversationMessages {
+		if i == maxOpenAIConversationMessages {
 			content = longContent
 		}
 		role := "user"
@@ -27,9 +27,9 @@ func TestNormalizeChatMessages(t *testing.T) {
 		messages = append(messages, ChatMessage{Role: role, Content: content})
 	}
 
-	normalized := normalizeChatMessages(messages)
-	if len(normalized) != maxConversationMessages {
-		t.Fatalf("expected %d messages, got %d", maxConversationMessages, len(normalized))
+	normalized := normalizeChatMessages(messages, openAILimits)
+	if len(normalized) != maxOpenAIConversationMessages {
+		t.Fatalf("expected %d messages, got %d", maxOpenAIConversationMessages, len(normalized))
 	}
 	if normalized[0].Content != "hello" {
 		t.Fatalf("expected trimmed content, got %q", normalized[0].Content)
@@ -37,8 +37,15 @@ func TestNormalizeChatMessages(t *testing.T) {
 	if normalized[0].Role != "user" && normalized[0].Role != "assistant" {
 		t.Fatalf("unexpected role: %s", normalized[0].Role)
 	}
-	if len(normalized[len(normalized)-1].Content) != maxMessageChars {
-		t.Fatalf("expected truncated message length %d, got %d", maxMessageChars, len(normalized[len(normalized)-1].Content))
+	last := normalized[len(normalized)-1].Content
+	// The notice is counted against the cap, so a truncated message lands
+	// exactly on it. An exact check also catches a regression that keeps far
+	// less than the budget allows, which an upper bound would let through.
+	if len([]rune(last)) != maxOpenAIMessageChars {
+		t.Fatalf("truncated message must be exactly %d runes, got %d", maxOpenAIMessageChars, len([]rune(last)))
+	}
+	if !strings.HasSuffix(last, truncationNotice) {
+		t.Fatalf("truncated message must carry the truncation notice, got tail %q", last[max(0, len(last)-80):])
 	}
 }
 

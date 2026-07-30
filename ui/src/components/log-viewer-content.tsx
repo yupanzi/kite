@@ -421,6 +421,7 @@ export function LogViewer({
     tailLines,
     timestamps,
     previous,
+    isLoading,
     cleanLog,
   ])
 

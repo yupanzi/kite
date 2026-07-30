@@ -11,12 +11,17 @@ var (
 	Version   = "dev"
 	BuildDate = "unknown"
 	CommitID  = "unknown"
+	// CommitURLBase is the web-URL prefix a commit id is appended to, so the UI can
+	// deep-link the deployed commit. Defaults to the upstream GitHub repo; the fork's
+	// release workflow overrides it via -X so the link resolves on the fork.
+	CommitURLBase = "https://github.com/zxh326/kite/commit/"
 )
 
 type VersionInfo struct {
 	Version   string `json:"version"`
 	BuildDate string `json:"buildDate"`
 	CommitID  string `json:"commitId"`
+	CommitURL string `json:"commitUrl"`
 	HasNew    bool   `json:"hasNewVersion"`
 	Release   string `json:"releaseUrl"`
 }
@@ -26,6 +31,7 @@ func GetVersion(c *gin.Context) {
 		Version:   Version,
 		BuildDate: BuildDate,
 		CommitID:  CommitID,
+		CommitURL: CommitURLBase + CommitID,
 	}
 
 	if common.EnableVersionCheck {

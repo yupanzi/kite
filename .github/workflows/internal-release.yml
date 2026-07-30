@@ -1,0 +1,174 @@
+# Build & release for the fork's master branch: every master push releases.
+#
+#   frontend (pnpm 9) -> static/                       (vite build, go:embed)
+#   backend  (go)     -> bin/kite-{amd64,arm64}        (version stamped via -X)
+#   image    (buildx) -> ghcr.io/yupanzi/kite:<VERSION> + :latest  (Dockerfile.binary)
+#   chart    (helm)   -> oci://ghcr.io/yupanzi/charts/kite         (pinned to <VERSION>)
+#   release  (gh)     -> GitHub Release "build-<VERSION>" with the chart .tgz attached
+#
+# VERSION is the date build id YYYY.MD.HMS: immutable image tag and chart
+# version, so every build is individually pullable.
+# The chart's appVersion stays at the upstream value; annotations record the
+# upstream base this build derives from.
+name: Internal Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+# Rapid successive pushes: cancel the older build, only the newest publishes.
+concurrency:
+  group: internal-release
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "24"
+  IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/kite
+  CHART_OCI: oci://ghcr.io/${{ github.repository_owner }}/charts
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'yupanzi/kite' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Compute version
+        run: |
+          set -eu
+          # Date build id YYYY.MD.HMS, e.g. 2026.730.42315. Computed arithmetically
+          # (10# forces base 10) so no component ever carries a leading zero — a
+          # concatenated "0MMSS" patch at UTC hour 00 would not be valid semver.
+          read -r Y M D H MIN S <<< "$(date -u +'%Y %m %d %H %M %S')"
+          VERSION="${Y}.$((10#$M * 100 + 10#$D)).$((10#$H * 10000 + 10#$MIN * 100 + 10#$S))"
+          UPSTREAM_CHART_VERSION=$(sed -n 's/^version:[[:space:]]*//p' charts/kite/Chart.yaml | head -1)
+          UPSTREAM_APP_VERSION=$(sed -n 's/^appVersion:[[:space:]]*//p' charts/kite/Chart.yaml | head -1 | tr -d '"')
+          {
+            echo "VERSION=${VERSION}"
+            echo "UPSTREAM_CHART_VERSION=${UPSTREAM_CHART_VERSION}"
+            echo "UPSTREAM_APP_VERSION=${UPSTREAM_APP_VERSION}"
+          } >> "$GITHUB_ENV"
+          echo "Releasing ${VERSION} (upstream chart ${UPSTREAM_CHART_VERSION}, app ${UPSTREAM_APP_VERSION})"
+
+      # pnpm is pinned to 9: pnpm 10.16+ refuses to run dependency build scripts
+      # (esbuild) without an allowlist and hard-fails the install; pnpm 9 builds
+      # them as before and reads the v9.0 lockfile.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          check-latest: true
+
+      - name: Build frontend
+        run: |
+          set -eu
+          cd ui
+          pnpm install --frozen-lockfile
+          pnpm run build
+          test -d ../static
+
+      - name: Build backend
+        run: |
+          set -eu
+          go mod download
+          # Frontend artifact must exist for go:embed.
+          test -d static
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w"
+          LDFLAGS="$LDFLAGS -X github.com/zxh326/kite/pkg/version.Version=${VERSION}"
+          LDFLAGS="$LDFLAGS -X github.com/zxh326/kite/pkg/version.BuildDate=${BUILD_DATE}"
+          LDFLAGS="$LDFLAGS -X github.com/zxh326/kite/pkg/version.CommitID=${GITHUB_SHA}"
+          LDFLAGS="$LDFLAGS -X github.com/zxh326/kite/pkg/version.CommitURLBase=${{ github.server_url }}/${{ github.repository }}/commit/"
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/kite-amd64 .
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/kite-arm64 .
+          # Dockerfile.binary copies bin/kite-$TARGETARCH; fail here, not in the pod.
+          test -f bin/kite-amd64 && test -f bin/kite-arm64
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # No QEMU needed: Dockerfile.binary has no RUN steps, buildx only copies
+      # the prebuilt per-arch binaries.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile.binary
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.IMAGE_REPO }}:${{ env.VERSION }}
+            ${{ env.IMAGE_REPO }}:latest
+          labels: runnumber=${{ github.run_id }}
+
+      - name: Lint chart
+        run: |
+          helm lint charts/kite
+          helm template kite charts/kite > /dev/null
+
+      - name: Package chart
+        run: |
+          set -eu
+          cd charts/kite
+          # Chart version = date build id; image repointed at the fork registry and
+          # pinned to this build's immutable tag. appVersion stays upstream; the
+          # annotations keep the fork build traceable against its upstream base.
+          sed -i "s/^version:.*/version: ${VERSION}/" Chart.yaml
+          sed -i "s|repository: ghcr.io/kite-org/kite|repository: ${IMAGE_REPO}|" values.yaml
+          sed -i "s|^  tag:.*|  tag: \"${VERSION}\"|" values.yaml
+          grep -q "repository: ${IMAGE_REPO}" values.yaml
+          grep -q "tag: \"${VERSION}\"" values.yaml
+          cat >> Chart.yaml <<EOF
+
+          annotations:
+            yupanzi/fork-build: "true"
+            yupanzi/commit: "${GITHUB_SHA}"
+            yupanzi/upstream-chart-version: "${UPSTREAM_CHART_VERSION}"
+            yupanzi/upstream-app-version: "${UPSTREAM_APP_VERSION}"
+          EOF
+          echo "--- Chart.yaml ---" && cat Chart.yaml
+          helm package .
+
+      - name: Push chart to OCI registry
+        run: |
+          set -eu
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "charts/kite/kite-${VERSION}.tgz" "${CHART_OCI}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          NOTES="Fork build \`${VERSION}\` from ${GITHUB_SHA}
+
+          - Image: \`${IMAGE_REPO}:${VERSION}\` (also \`:latest\`)
+          - Chart: \`helm install kite ${CHART_OCI}/kite --version ${VERSION} -n kite-system --create-namespace\`
+          - Upstream base: chart ${UPSTREAM_CHART_VERSION}, app ${UPSTREAM_APP_VERSION}"
+          gh release create "build-${VERSION}" "charts/kite/kite-${VERSION}.tgz" \
+            --target "${GITHUB_SHA}" \
+            --title "build ${VERSION}" \
+            --notes "${NOTES}"

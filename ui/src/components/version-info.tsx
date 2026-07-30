@@ -8,10 +8,12 @@ export function VersionInfo() {
   const handleCommitClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // GitHub repository URL - you can modify this to match your repository
-    const repoUrl = 'https://github.com/zxh326/kite'
-    const commitUrl = `${repoUrl}/commit/${versionInfo.commitId}`
-    window.open(commitUrl, '_blank')
+    // commitUrl is built server-side from the build's CommitURLBase (upstream GitHub by
+    // default, or the fork repo for fork builds), so it points at the repo the commit
+    // actually lives on instead of a hardcoded upstream URL.
+    if (versionInfo.commitUrl) {
+      window.open(versionInfo.commitUrl, '_blank')
+    }
   }
 
   return (
@@ -20,7 +22,7 @@ export function VersionInfo() {
       <button
         onClick={handleCommitClick}
         className="hover:text-primary/80 hover:underline transition-colors cursor-pointer"
-        title={`View commit ${versionInfo.commitId} on GitHub`}
+        title={`View commit ${versionInfo.commitId}`}
       >
         {versionInfo.commitId.slice(0, 7)}
       </button>

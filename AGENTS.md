@@ -95,6 +95,32 @@ The backend package layout is feature-oriented:
 - `pkg/ai` owns provider configuration, chat handling, tool definitions,
   interaction pauses, Kubernetes tool execution, and tool authorization.
 
+### AI request budgets
+
+Two settings control model behaviour and they are not interchangeable:
+
+- `AIMaxTokens` is a per-response ceiling. On current Claude models thinking and
+  answer text share it, so a small value truncates the answer. It is sent to the
+  provider as configured — never clamped, floored, or rejected, because only the
+  provider knows the configured model's real limit.
+- `AIEffort` (`output_config.effort`) is the reasoning-depth knob and the only
+  one: `budget_tokens` is removed on current models and returns 400. Levels are
+  `low`/`medium`/`high`/`xhigh`/`max`, default `xhigh`. Anthropic path only.
+
+`anthropicModelSupportsModernFeatures` gates effort, adaptive thinking, and
+context management behind a deny list of model-name substrings. That list tracks
+*request-surface support*, not lifecycle — Opus 4.5, Sonnet 4.5, and Haiku 4.5
+are all still sold but reject the modern surface, and retired first-party models
+stay listed because they remain available through Bedrock and Google Cloud. A
+false negative here silently downgrades a capable model; there is no retry on a
+400, so widening the gate needs a fallback path first.
+
+SSE streams (`newStreamSender` in `pkg/ai/handler.go`) emit a keepalive comment
+every 20s. An agent turn is legitimately silent while a tool runs, and
+ingress-nginx closes a connection after 60s of backend silence. Chart timeouts
+and the ingress annotation examples in `charts/kite/values.yaml` are the other
+half of this — change them together.
+
 ## Request flow
 
 Most protected API calls go through:

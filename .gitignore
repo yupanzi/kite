@@ -49,3 +49,10 @@ kite
 
 
 .gocache/
+
+# Playwright MCP scratch output (browser console logs / page snapshots)
+.playwright-mcp/
+
+# Local-only dev scaffolding (see .local/README.md) — never committed
+.local/
+

@@ -24,7 +24,7 @@ type pendingSession struct {
 	Provider          string
 	SystemPrompt      string
 	OpenAIMessages    []openai.ChatCompletionMessageParamUnion
-	AnthropicMessages []anthropic.MessageParam
+	AnthropicMessages []anthropic.BetaMessageParam
 	ToolCall          pendingToolCall
 	ExpiresAt         time.Time
 }

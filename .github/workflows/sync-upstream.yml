@@ -1,0 +1,72 @@
+# Daily upstream sync for this fork.
+#
+#   kite-org/kite main ──(this workflow, daily)──▶ fork main   (exact mirror, force-push)
+#                                                     │
+#                                                     └──(merge)──▶ fork master (primary branch)
+#
+# A real merge conflict fails the job; resolve it locally with
+# scripts/sync-upstream.sh (or `git merge` on master) and push.
+#
+# REQUIRES the SYNC_TOKEN repository secret: a PAT with push access AND workflow
+# rights (classic PAT: repo + workflow scopes; fine-grained PAT: Contents and
+# Workflows read/write). The default GITHUB_TOKEN cannot be used here — GitHub
+# rejects its pushes whenever the synced upstream commits touch
+# .github/workflows/ files (no grantable `workflows` permission exists), and
+# upstream edits its workflows regularly. A PAT push also triggers push-event
+# workflows normally, so the master push below fires internal-release.yml by
+# itself — no explicit dispatch needed.
+#
+# Scheduled workflows only run from the repository's DEFAULT branch — this file
+# relies on `master` being the default branch of the fork.
+name: Sync Upstream
+
+on:
+  schedule:
+    # 04:23 Asia/Shanghai (20:23 UTC).
+    - cron: '23 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/kite-org/kite.git
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'yupanzi/kite' }}
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v5
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Fetch upstream main
+        run: git fetch --no-tags "$UPSTREAM_URL" "+main:refs/remotes/upstream/main"
+
+      - name: Mirror upstream main -> fork main
+        run: git push --force origin "refs/remotes/upstream/main:refs/heads/main"
+
+      - name: Merge upstream main into master
+        run: |
+          set -eu
+          if git merge-base --is-ancestor refs/remotes/upstream/main HEAD; then
+            echo "master already contains upstream main; nothing to merge."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git merge --no-edit --no-ff refs/remotes/upstream/main \
+              -m "chore: auto-sync upstream main into master ($(date -u +%F))"; then
+            git merge --abort || true
+            echo "CONFLICT merging upstream main into master. Run scripts/sync-upstream.sh locally, resolve, and push." >&2
+            exit 1
+          fi
+          git push origin master

@@ -28,6 +28,7 @@ export interface VersionInfo {
   version: string
   buildDate: string
   commitId: string
+  commitUrl: string
   hasNewVersion: boolean
   releaseUrl: string
 }

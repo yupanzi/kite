@@ -399,7 +399,7 @@ function MessageBubble({
               </div>
             )}
             {hasContent && (
-              <div className="ai-markdown">
+              <div className="ai-markdown overflow-x-auto">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {message.content}
                 </ReactMarkdown>
