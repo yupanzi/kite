@@ -167,6 +167,7 @@ jobs:
 
           - Image: \`${IMAGE_REPO}:${VERSION}\` (also \`:latest\`)
           - Chart: \`helm install kite ${CHART_OCI}/kite --version ${VERSION} -n kite-system --create-namespace\`
+          - Kite UI: add \`${CHART_OCI}/kite\` as a chart repository (Charts → Add Repository) to browse and install every build version; all published versions stay pullable from GHCR
           - Upstream base: chart ${UPSTREAM_CHART_VERSION}, app ${UPSTREAM_APP_VERSION}"
           gh release create "build-${VERSION}" "charts/kite/kite-${VERSION}.tgz" \
             --target "${GITHUB_SHA}" \
