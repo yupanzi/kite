@@ -35,7 +35,7 @@ func toOpenAIMessages(systemPrompt string, chatMessages []ChatMessage) []openai.
 				ID:        msg.ToolCallID,
 				Name:      msg.ToolName,
 				Arguments: toolArgsJSON(msg.ToolArgs),
-			}}))
+			}}, "", ""))
 			messages = append(messages, openai.ToolMessage(result, msg.ToolCallID))
 		default:
 			messages = append(messages, openai.UserMessage(msg.Content))
