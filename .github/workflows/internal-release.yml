@@ -1,6 +1,6 @@
 # Build & release for the fork's master branch: every master push releases.
 #
-#   frontend (pnpm 9) -> static/                       (vite build, go:embed)
+#   frontend (pnpm 10) -> static/                      (vite build, go:embed)
 #   backend  (go)     -> bin/kite-{amd64,arm64}        (version stamped via -X)
 #   image    (buildx) -> ghcr.io/yupanzi/kite:<VERSION> + :latest  (Dockerfile.binary)
 #   chart    (helm)   -> oci://ghcr.io/yupanzi/charts/kite         (pinned to <VERSION>)
@@ -57,12 +57,12 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "Releasing ${VERSION} (upstream chart ${UPSTREAM_CHART_VERSION}, app ${UPSTREAM_APP_VERSION})"
 
-      # pnpm is pinned to 9: pnpm 10.16+ refuses to run dependency build scripts
-      # (esbuild) without an allowlist and hard-fails the install; pnpm 9 builds
-      # them as before and reads the v9.0 lockfile.
+      # pnpm 10, same as upstream ci.yml/release.yaml on the same v9.0 lockfile.
+      # The install warns "Ignored build scripts: esbuild" — pnpm 10 wants an
+      # allowlist for them — and continues; the frontend build is unaffected.
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
