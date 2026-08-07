@@ -60,7 +60,9 @@ jobs:
       # pnpm 10, same as upstream ci.yml/release.yaml on the same v9.0 lockfile.
       # The install warns "Ignored build scripts: esbuild" — pnpm 10 wants an
       # allowlist for them — and continues; the frontend build is unaffected.
-      - uses: pnpm/action-setup@v4
+      # action-setup is deliberately ahead of upstream's v4: v4 still targets
+      # the deprecated node20 runtime (v5 moved to node24, v6 added pnpm 11).
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
       - name: Setup Node.js
