@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  IconLink,
   IconMessage,
   IconRobot,
   IconSettings,
@@ -49,6 +50,7 @@ const DEFAULT_AI_EFFORT: AIEffort = 'xhigh'
 const AI_EFFORTS: AIEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 const DEFAULT_KUBECTL_IMAGE = 'zzde/kubectl:latest'
 const DEFAULT_NODE_TERMINAL_IMAGE = 'busybox:latest'
+const DEFAULT_CONNECTOR_IMAGE = 'ghcr.io/kite-org/kite:latest'
 
 interface GeneralSettingsFormData {
   aiAgentEnabled: boolean
@@ -62,6 +64,7 @@ interface GeneralSettingsFormData {
   kubectlEnabled: boolean
   kubectlImage: string
   nodeTerminalImage: string
+  connectorImage: string
   enableAnalytics: boolean
   enableVersionCheck: boolean
   loginPrompt: string
@@ -83,6 +86,7 @@ export function GeneralManagement() {
     kubectlEnabled: true,
     kubectlImage: DEFAULT_KUBECTL_IMAGE,
     nodeTerminalImage: DEFAULT_NODE_TERMINAL_IMAGE,
+    connectorImage: DEFAULT_CONNECTOR_IMAGE,
     enableAnalytics: true,
     enableVersionCheck: true,
     loginPrompt: '',
@@ -104,6 +108,7 @@ export function GeneralManagement() {
       kubectlEnabled: data.kubectlEnabled ?? true,
       kubectlImage: data.kubectlImage || DEFAULT_KUBECTL_IMAGE,
       nodeTerminalImage: data.nodeTerminalImage || DEFAULT_NODE_TERMINAL_IMAGE,
+      connectorImage: data.connectorImage || DEFAULT_CONNECTOR_IMAGE,
       enableAnalytics: data.enableAnalytics ?? false,
       enableVersionCheck: data.enableVersionCheck ?? true,
       loginPrompt: data.loginPrompt || '',
@@ -186,6 +191,7 @@ export function GeneralManagement() {
       kubectlImage: formData.kubectlImage.trim() || DEFAULT_KUBECTL_IMAGE,
       nodeTerminalImage:
         formData.nodeTerminalImage.trim() || DEFAULT_NODE_TERMINAL_IMAGE,
+      connectorImage: formData.connectorImage.trim() || DEFAULT_CONNECTOR_IMAGE,
       enableAnalytics: formData.enableAnalytics,
       enableVersionCheck: formData.enableVersionCheck,
       loginPrompt: formData.loginPrompt.trim(),
@@ -474,6 +480,38 @@ export function GeneralManagement() {
                 }))
               }
               placeholder={DEFAULT_NODE_TERMINAL_IMAGE}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <IconLink className="h-4 w-4" />
+              {t('generalManagement.connector.title', 'Connector Image')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.connector.description',
+                'Container image used when generating the Kite Connector manifest for connector-type clusters.'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="general-connector-image">
+              {t('generalManagement.connector.form.image', 'Image')}
+            </Label>
+            <Input
+              id="general-connector-image"
+              value={formData.connectorImage}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  connectorImage: e.target.value,
+                }))
+              }
+              placeholder={DEFAULT_CONNECTOR_IMAGE}
             />
           </div>
         </div>
