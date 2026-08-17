@@ -3,7 +3,7 @@ module github.com/zxh326/kite
 go 1.26.0
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.61.0
+	github.com/anthropics/anthropic-sdk-go v1.62.0
 	github.com/blang/semver/v4 v4.0.0
 	github.com/bytedance/mockey v1.4.6
 	github.com/fsnotify/fsnotify v1.10.1
@@ -42,6 +42,8 @@ require (
 	sigs.k8s.io/gateway-api v1.6.1
 	sigs.k8s.io/yaml v1.6.0
 )
+
+replace github.com/rancher/remotedialer => github.com/zxh326/remotedialer v0.0.0-20260815085230-0ff84947e93f
 
 require (
 	github.com/go-openapi/swag/cmdutils v0.26.0 // indirect

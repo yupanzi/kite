@@ -11,10 +11,10 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 )
 
-func TestNormalizeChatMessages(t *testing.T) {
+func TestNormalizeAgentMessages(t *testing.T) {
 	longContent := strings.Repeat("a", maxOpenAIMessageChars+10)
-	messages := make([]ChatMessage, 0, maxOpenAIConversationMessages+2)
-	messages = append(messages, ChatMessage{Role: "user", Content: "   "})
+	messages := make([]AgentMessage, 0, maxOpenAIConversationMessages+2)
+	messages = append(messages, AgentMessage{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "   "}}})
 	for i := 0; i < maxOpenAIConversationMessages+1; i++ {
 		content := "  hello  "
 		if i == maxOpenAIConversationMessages {
@@ -22,22 +22,22 @@ func TestNormalizeChatMessages(t *testing.T) {
 		}
 		role := "user"
 		if i%2 == 0 {
-			role = "assistant"
+			role = messageRoleAssistant
 		}
-		messages = append(messages, ChatMessage{Role: role, Content: content})
+		messages = append(messages, AgentMessage{Role: role, Content: []ContentBlock{{Type: contentBlockText, Text: content}}})
 	}
 
-	normalized := normalizeChatMessages(messages, openAILimits)
+	normalized := normalizeAgentMessages(messages, openAILimits)
 	if len(normalized) != maxOpenAIConversationMessages {
 		t.Fatalf("expected %d messages, got %d", maxOpenAIConversationMessages, len(normalized))
 	}
-	if normalized[0].Content != "hello" {
-		t.Fatalf("expected trimmed content, got %q", normalized[0].Content)
+	if normalized[0].Content[0].Text != "hello" {
+		t.Fatalf("expected trimmed content, got %q", normalized[0].Content[0].Text)
 	}
-	if normalized[0].Role != "user" && normalized[0].Role != "assistant" {
+	if normalized[0].Role != messageRoleUser && normalized[0].Role != messageRoleAssistant {
 		t.Fatalf("unexpected role: %s", normalized[0].Role)
 	}
-	last := normalized[len(normalized)-1].Content
+	last := normalized[len(normalized)-1].Content[0].Text
 	// The notice is counted against the cap, so a truncated message lands
 	// exactly on it. An exact check also catches a regression that keeps far
 	// less than the budget allows, which an upper bound would let through.
@@ -165,8 +165,8 @@ func TestParseToolCallArguments(t *testing.T) {
 }
 
 func TestMarshalSSEEvent(t *testing.T) {
-	got := MarshalSSEEvent(SSEEvent{Event: "message", Data: map[string]string{"content": "hello"}})
-	want := "event: message\ndata: {\"content\":\"hello\"}\n\n"
+	got := MarshalSSEEvent(AgentEvent{Type: "message_delta", Data: MessageDeltaEvent{BlockType: contentBlockText, Content: "hello"}})
+	want := "event: message_delta\ndata: {\"block_type\":\"text\",\"content\":\"hello\"}\n\n"
 	if got != want {
 		t.Fatalf("unexpected SSE output:\nwant: %q\ngot:  %q", want, got)
 	}

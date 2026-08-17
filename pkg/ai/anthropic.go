@@ -2,20 +2,19 @@ package ai
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/klog/v2"
 )
 
-func toolUseInput(args map[string]interface{}) any {
-	if args == nil {
-		return map[string]interface{}{}
-	}
-	return args
+// anthropicProvider talks to the Beta Messages API rather than the stable one.
+// The beta surface is what carries output effort, adaptive thinking, and context
+// management; on the stable surface those requests are simply not expressible.
+type anthropicProvider struct {
+	client anthropic.Client
 }
 
 // legacyAnthropicModelMarkers identifies models that predate the Opus-4.6-era
@@ -85,326 +84,132 @@ func anthropicOutputEffort(effort string) anthropic.BetaOutputConfigEffort {
 	}
 }
 
-// emptyAnthropicResponseMessage explains an empty response using the provider's
-// own stop_reason. A bare "AI returned no content" hides the two causes an
-// operator can actually act on — an exhausted output budget and an exceeded
-// context window — behind a message that reads like a Kite bug.
-func emptyAnthropicResponseMessage(stopReason anthropic.BetaStopReason, maxTokens int) string {
-	switch stopReason {
-	case anthropic.BetaStopReasonMaxTokens:
-		return fmt.Sprintf("The model hit the Max Tokens limit (%d) before producing an answer. "+
-			"On current Claude models thinking and answer share this budget — raise Max Tokens, "+
-			"or lower Reasoning Effort, in Settings.", maxTokens)
-	case anthropic.BetaStopReasonModelContextWindowExceeded:
-		return "The conversation exceeded the model's context window. Start a new chat, " +
-			"or narrow the tool queries so less output is carried forward."
-	case anthropic.BetaStopReasonRefusal:
-		return "The model declined this request."
-	case anthropic.BetaStopReasonPauseTurn:
-		return "The model paused mid-turn without producing content. Send the message again to resume."
-	default:
-		if stopReason != "" {
-			return fmt.Sprintf("AI returned no content (stop_reason: %s)", stopReason)
-		}
-		return "AI returned no content"
+// anthropicSystemBlocks splits the system prompt into a cacheable prefix and the
+// volatile remainder. The large, fixed systemPrompt renders identically on every
+// request, so caching it lets multi-turn conversations read it at ~0.1x price;
+// the per-request context (time, cluster, page) must stay outside that block or
+// its timestamp would invalidate the cache on every single request.
+func anthropicSystemBlocks(prompt string) []anthropic.BetaTextBlockParam {
+	if !strings.HasPrefix(prompt, systemPrompt) {
+		return []anthropic.BetaTextBlockParam{{Text: prompt}}
 	}
-}
-
-func toAnthropicMessages(chatMessages []ChatMessage) []anthropic.BetaMessageParam {
-	normalized := normalizeChatMessages(chatMessages, anthropicLimits)
-
-	// Append blocks under a role, coalescing into the previous message when it
-	// shares that role. Anthropic requires strictly alternating user/assistant
-	// roles, so an assistant text turn immediately followed by an assistant
-	// tool_use turn must merge into one message.
-	messages := make([]anthropic.BetaMessageParam, 0, len(normalized))
-	push := func(role string, blocks ...anthropic.BetaContentBlockParamUnion) {
-		if n := len(messages); n > 0 && string(messages[n-1].Role) == role {
-			messages[n-1].Content = append(messages[n-1].Content, blocks...)
-			return
-		}
-		if role == "assistant" {
-			messages = append(messages, anthropic.BetaMessageParam{Role: "assistant", Content: blocks})
-		} else {
-			messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
-		}
-	}
-
-	for _, msg := range normalized {
-		switch msg.Role {
-		case "assistant":
-			push("assistant", anthropic.NewBetaTextBlock(msg.Content))
-		case "tool":
-			// A tool round-trip expands to an assistant tool_use block followed
-			// by a user tool_result block — the structured pair the model needs,
-			// never flattened text.
-			push("assistant", anthropic.BetaContentBlockParamUnion{OfToolUse: &anthropic.BetaToolUseBlockParam{
-				ID:    msg.ToolCallID,
-				Name:  msg.ToolName,
-				Input: toolUseInput(msg.ToolArgs),
-			}})
-			push("user", anthropic.NewBetaToolResultBlock(msg.ToolCallID, msg.ToolResult, msg.IsError))
-		default:
-			push("user", anthropic.NewBetaTextBlock(msg.Content))
-		}
-	}
-
-	return messages
-}
-
-func (a *Agent) processChatAnthropic(c *gin.Context, req *ChatRequest, sendEvent func(SSEEvent)) {
-	ctx := c.Request.Context()
-	runtimeCtx := buildRuntimePromptContext(c, a.cs)
-	language := normalizeLanguage(req.Language)
-	if language == "" {
-		language = "en"
-	}
-	// The stable systemPrompt is cached inside runAnthropicConversation; only the
-	// volatile per-request context travels here, as a separate uncached block.
-	sysPromptSuffix := contextualPromptSuffix(req.PageContext, runtimeCtx, language)
-	messages := toAnthropicMessages(req.Messages)
-	a.runAnthropicConversation(ctx, c, sysPromptSuffix, messages, sendEvent)
-}
-
-func (a *Agent) continueChatAnthropic(c *gin.Context, session pendingSession, sendEvent func(SSEEvent)) error {
-	ctx := c.Request.Context()
-	result, isError := ExecuteTool(ctx, c, a.cs, session.ToolCall.Name, session.ToolCall.Args)
-	return a.continueChatAnthropicWithToolResult(c, session, result, isError, sendEvent)
-}
-
-func (a *Agent) continueChatAnthropicWithToolResult(c *gin.Context, session pendingSession, result string, isError bool, sendEvent func(SSEEvent)) error {
-	ctx := c.Request.Context()
-	result = truncateWithNotice(result, maxAnthropicToolResultChars, "tool result "+session.ToolCall.Name)
-	sendEvent(SSEEvent{
-		Event: "tool_result",
-		Data:  buildToolResultEventData(session.ToolCall.ID, session.ToolCall.Name, result, isError),
-	})
-
-	toolResult := result
-	if isError {
-		toolResult = "Tool error: " + result
-	}
-
-	session.AnthropicMessages = append(
-		session.AnthropicMessages,
-		anthropic.NewBetaUserMessage(
-			anthropic.NewBetaToolResultBlock(session.ToolCall.ID, toolResult, isError),
-		),
-	)
-	a.runAnthropicConversation(ctx, c, session.SystemPrompt, session.AnthropicMessages, sendEvent)
-	return nil
-}
-
-func (a *Agent) runAnthropicConversation(
-	ctx context.Context,
-	c *gin.Context,
-	sysPromptSuffix string,
-	messages []anthropic.BetaMessageParam,
-	sendEvent func(SSEEvent),
-) {
-	if len(messages) == 0 {
-		sendEvent(SSEEvent{Event: "error", Data: map[string]string{"message": "No conversation messages to send"}})
-		return
-	}
-
-	tools := BetaAnthropicToolDefs(a.cs)
-	modern := anthropicModelSupportsModernFeatures(a.model)
-
-	// Cache the large, fixed system prompt together with the tool definitions
-	// that render before it — a stable prefix multi-turn conversations read at
-	// ~0.1x price. The volatile per-request context (time, cluster, page) rides
-	// in a second, uncached block so it can't invalidate the cached prefix.
-	system := []anthropic.BetaTextBlockParam{{
+	blocks := []anthropic.BetaTextBlockParam{{
 		Text:         systemPrompt,
 		CacheControl: anthropic.NewBetaCacheControlEphemeralParam(),
 	}}
-	if strings.TrimSpace(sysPromptSuffix) != "" {
-		system = append(system, anthropic.BetaTextBlockParam{Text: sysPromptSuffix})
+	if suffix := prompt[len(systemPrompt):]; strings.TrimSpace(suffix) != "" {
+		blocks = append(blocks, anthropic.BetaTextBlockParam{Text: suffix})
 	}
+	return blocks
+}
 
+func (p *anthropicProvider) Stream(
+	ctx context.Context,
+	request providerRequest,
+	sendEvent func(AgentEvent),
+) (AgentMessage, error) {
 	// max_tokens is sent as configured. It is a ceiling on thinking + answer
 	// combined, but an unused ceiling costs nothing, so silently raising an
 	// operator's explicit budget would only inflate their bill. Depth is asked
 	// for with output effort below, not by inflating this number.
-	maxTokens := a.maxTokens
-
-	maxIterations := 100
-	for i := 0; i < maxIterations; i++ {
-		params := anthropic.BetaMessageNewParams{
-			Model:     a.model,
-			Messages:  messages,
-			System:    system,
-			Tools:     tools,
-			MaxTokens: int64(maxTokens),
-			ToolChoice: anthropic.BetaToolChoiceUnionParam{
-				// Serialize tool calls: the confirmation/pause-resume flow carries
-				// one pending tool per turn, and parallel tool_use in a single
-				// assistant turn would split its tool_results across two user
-				// messages on resume — an invalid, alternation-breaking request.
-				OfAuto: &anthropic.BetaToolChoiceAutoParam{
-					DisableParallelToolUse: anthropic.Bool(true),
-				},
-			},
-		}
-
-		if modern {
-			// Opus 4.x request surface — older models (e.g. claude-sonnet-4-5)
-			// 400 on these, so apply them only when the model supports them.
-			// display:"summarized" keeps the streamed think content populated;
-			// the default "omitted" would blank out the UI's thinking bubble.
-			params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{
-				Display: anthropic.BetaThinkingConfigAdaptiveDisplaySummarized,
-			}}
-			params.OutputConfig = anthropic.BetaOutputConfigParam{Effort: anthropicOutputEffort(a.effort)}
-			// Context editing: server-side clears the oldest tool results once the
-			// transcript grows large, keeping long agent loops within budget
-			// without summarizing. No-op on gateways that don't honor the beta.
-			params.ContextManagement = anthropic.BetaContextManagementConfigParam{
-				Edits: []anthropic.BetaContextManagementConfigEditUnionParam{
-					{OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{}},
-				},
-			}
-			params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaContextManagement2025_06_27}
-		}
-
-		stream := a.anthropicClient.Beta.Messages.NewStreaming(ctx, params)
-
-		message, messageContent, thinkingContent, streamedToolCalls, err := consumeAnthropicStreamingResponse(stream, sendEvent)
-		if err != nil {
-			klog.Errorf("AI generation error: %v", err)
-			sendEvent(SSEEvent{Event: "error", Data: map[string]string{"message": fmt.Sprintf("AI error: %v", err)}})
-			return
-		}
-
-		klog.V(2).Infof("Anthropic usage: input=%d cache_read=%d cache_write=%d output=%d",
-			message.Usage.InputTokens, message.Usage.CacheReadInputTokens, message.Usage.CacheCreationInputTokens, message.Usage.OutputTokens)
-
-		if len(streamedToolCalls) == 0 {
-			content := strings.TrimSpace(messageContent)
-			if content == "" && strings.TrimSpace(thinkingContent) == "" {
-				sendEvent(SSEEvent{Event: "error", Data: map[string]string{
-					"message": emptyAnthropicResponseMessage(message.StopReason, maxTokens),
-				}})
-				return
-			}
-			return
-		}
-
-		messages = append(messages, message.ToParam())
-		toolResults := make([]anthropic.BetaContentBlockParamUnion, 0, len(streamedToolCalls))
-
-		for _, tc := range streamedToolCalls {
-			toolName := tc.Name
-			args, err := parseToolCallArguments(tc.Arguments)
-			if err != nil {
-				klog.Errorf("Failed to parse tool arguments: %v", err)
-				toolError := fmt.Sprintf("Failed to parse arguments: %v", err)
-				toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, "Tool error: "+toolError, true))
-				continue
-			}
-
-			sendEvent(SSEEvent{
-				Event: "tool_call",
-				Data:  buildToolCallEventData(tc, args),
-			})
-
-			if InteractionTools[toolName] {
-				request, err := parseInteractionRequest(toolName, args)
-				if err != nil {
-					result := "Error: " + err.Error()
-					sendEvent(SSEEvent{
-						Event: "tool_result",
-						Data:  buildToolResultEventData(tc.ID, toolName, result, true),
-					})
-					toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, "Tool error: "+result, true))
-					continue
-				}
-				if len(toolResults) > 0 {
-					messages = append(messages, anthropic.NewBetaUserMessage(toolResults...))
-					toolResults = nil
-				}
-				sessionID := agentPendingSessions.save(pendingSession{
-					Provider:          a.provider,
-					SystemPrompt:      sysPromptSuffix,
-					AnthropicMessages: append([]anthropic.BetaMessageParam(nil), messages...),
-					ToolCall: pendingToolCall{
-						ID:   tc.ID,
-						Name: toolName,
-						Args: args,
-					},
-				})
-				if sessionID == "" {
-					errorMsg := "Failed to save pending session"
-					toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, "Tool error: "+errorMsg, true))
-					continue
-				}
-				sendEvent(SSEEvent{
-					Event: "input_required",
-					Data:  buildInteractionEventData(toolName, tc.ID, sessionID, request),
-				})
-				return
-			}
-
-			if MutationTools[toolName] {
-				result, isError := AuthorizeTool(c, a.cs, toolName, args)
-				if isError {
-					sendEvent(SSEEvent{
-						Event: "tool_result",
-						Data:  buildToolResultEventData(tc.ID, toolName, result, true),
-					})
-					toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, "Tool error: "+result, true))
-					continue
-				}
-				if len(toolResults) > 0 {
-					messages = append(messages, anthropic.NewBetaUserMessage(toolResults...))
-				}
-				sessionID := agentPendingSessions.save(pendingSession{
-					Provider:          a.provider,
-					SystemPrompt:      sysPromptSuffix,
-					AnthropicMessages: append([]anthropic.BetaMessageParam(nil), messages...),
-					ToolCall: pendingToolCall{
-						ID:   tc.ID,
-						Name: toolName,
-						Args: args,
-					},
-				})
-				if sessionID == "" {
-					errorMsg := "Failed to save pending session"
-					toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, "Tool error: "+errorMsg, true))
-					continue
-				}
-				sendEvent(SSEEvent{
-					Event: "action_required",
-					Data:  buildActionRequiredEventData(tc, sessionID, args),
-				})
-				return
-			}
-
-			result, isError := ExecuteTool(ctx, c, a.cs, toolName, args)
-			// Cap the live result the same way replayed history is capped. The
-			// per-tool bounds (log bytes, item counts) do not cover every tool —
-			// get_resource yaml-marshals whole objects — so without this an
-			// oversized result is only trimmed on the *next* turn, after the
-			// oversized request has already been sent.
-			result = truncateWithNotice(result, maxAnthropicToolResultChars, "tool result "+toolName)
-
-			sendEvent(SSEEvent{
-				Event: "tool_result",
-				Data:  buildToolResultEventData(tc.ID, toolName, result, isError),
-			})
-
-			if isError {
-				result = "Tool error: " + result
-			}
-			toolResults = append(toolResults, anthropic.NewBetaToolResultBlock(tc.ID, result, isError))
-		}
-
-		if len(toolResults) > 0 {
-			messages = append(messages, anthropic.NewBetaUserMessage(toolResults...))
-		}
+	params := anthropic.BetaMessageNewParams{
+		Model:     request.Model,
+		Messages:  toAnthropicMessages(request.Messages),
+		System:    anthropicSystemBlocks(request.SystemPrompt),
+		Tools:     AnthropicToolDefs(request.Tools),
+		MaxTokens: int64(request.MaxTokens),
+		ToolChoice: anthropic.BetaToolChoiceUnionParam{
+			OfAuto: &anthropic.BetaToolChoiceAutoParam{},
+		},
 	}
 
-	sendEvent(SSEEvent{Event: "error", Data: map[string]string{"message": "Too many tool calling iterations"}})
+	if anthropicModelSupportsModernFeatures(request.Model) {
+		// Modern request surface — older models (e.g. claude-sonnet-4-5) 400 on
+		// these, so apply them only when the model supports them.
+		// display:"summarized" keeps the streamed thinking content populated;
+		// the default "omitted" would blank out the UI's thinking bubble.
+		params.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{
+			Display: anthropic.BetaThinkingConfigAdaptiveDisplaySummarized,
+		}}
+		params.OutputConfig = anthropic.BetaOutputConfigParam{Effort: anthropicOutputEffort(request.Effort)}
+		// Context editing: the server clears the oldest tool results once the
+		// transcript grows large, keeping long agent loops within budget without
+		// summarizing. No-op on gateways that don't honor the beta.
+		params.ContextManagement = anthropic.BetaContextManagementConfigParam{
+			Edits: []anthropic.BetaContextManagementConfigEditUnionParam{
+				{OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{}},
+			},
+		}
+		params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaContextManagement2025_06_27}
+	}
+
+	stream := p.client.Beta.Messages.NewStreaming(ctx, params)
+	return consumeAnthropicStreamingResponse(stream, sendEvent)
+}
+
+func toAnthropicMessages(messages []AgentMessage) []anthropic.BetaMessageParam {
+	params := make([]anthropic.BetaMessageParam, 0, len(messages))
+	for _, message := range messages {
+		blocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(message.Content))
+		for _, block := range message.Content {
+			switch block.Type {
+			case contentBlockText:
+				blocks = append(blocks, anthropic.NewBetaTextBlock(block.Text))
+			case contentBlockThinking:
+				// An unsigned thinking block cannot be replayed: the server
+				// verifies the signature and rejects the turn without it.
+				if block.Signature != "" {
+					blocks = append(blocks, anthropic.NewBetaThinkingBlock(block.Signature, block.Text))
+				}
+			case contentBlockRedactedThinking:
+				blocks = append(blocks, anthropic.NewBetaRedactedThinkingBlock(block.Data))
+			case contentBlockToolCall:
+				blocks = append(blocks, anthropic.NewBetaToolUseBlock(block.ToolCallID, toolUseInput(block.Arguments), block.ToolName))
+			case contentBlockToolResult:
+				blocks = append(blocks, anthropic.NewBetaToolResultBlock(block.ToolCallID, block.Text, block.IsError))
+			}
+		}
+		if len(blocks) == 0 {
+			continue
+		}
+		// Anthropic requires strictly alternating user/assistant roles, and a
+		// tool-result turn counts as a user turn, so consecutive same-role
+		// messages have to coalesce into one instead of being sent as two.
+		role := anthropic.BetaMessageParamRoleUser
+		if message.Role == messageRoleAssistant {
+			role = anthropic.BetaMessageParamRoleAssistant
+		}
+		if n := len(params); n > 0 && params[n-1].Role == role {
+			params[n-1].Content = append(params[n-1].Content, blocks...)
+			continue
+		}
+		params = append(params, anthropic.BetaMessageParam{Role: role, Content: blocks})
+	}
+	return params
+}
+
+// toolUseInput keeps a nil argument map from marshalling to JSON null, which the
+// API rejects as tool_use input.
+func toolUseInput(args map[string]interface{}) any {
+	if args == nil {
+		return map[string]interface{}{}
+	}
+	return args
+}
+
+// toolArgsJSON renders decoded tool-call arguments back to a JSON object string.
+// The beta ToolUseBlock carries Input as a decoded `any` (the stable block hands
+// back raw JSON), so the raw form has to be reconstructed here to populate
+// RawArguments. Nil/empty/null all collapse to "{}", matching toolUseInput.
+func toolArgsJSON(args any) string {
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return "{}"
+	}
+	if trimmed := strings.TrimSpace(string(raw)); trimmed != "" && trimmed != "null" {
+		return trimmed
+	}
+	return "{}"
 }
 
 func consumeAnthropicStreamingResponse(
@@ -414,8 +219,8 @@ func consumeAnthropicStreamingResponse(
 		Err() error
 		Close() error
 	},
-	sendEvent func(SSEEvent),
-) (anthropic.BetaMessage, string, string, []streamedToolCall, error) {
+	sendEvent func(AgentEvent),
+) (AgentMessage, error) {
 	defer func() {
 		if err := stream.Close(); err != nil {
 			klog.Warningf("Failed to close AI stream: %v", err)
@@ -423,88 +228,78 @@ func consumeAnthropicStreamingResponse(
 	}()
 
 	var message anthropic.BetaMessage
-	var contentBuilder strings.Builder
-	var thinkingBuilder strings.Builder
-
 	for stream.Next() {
 		event := stream.Current()
 		if err := message.Accumulate(event); err != nil {
-			return anthropic.BetaMessage{}, "", "", nil, err
+			return AgentMessage{}, err
 		}
 
 		if startEvent, ok := event.AsAny().(anthropic.BetaRawContentBlockStartEvent); ok {
 			if thinkingBlock, ok := startEvent.ContentBlock.AsAny().(anthropic.BetaThinkingBlock); ok && thinkingBlock.Thinking != "" {
-				thinkingBuilder.WriteString(thinkingBlock.Thinking)
-				sendEvent(SSEEvent{Event: "think", Data: map[string]string{"content": thinkingBlock.Thinking}})
+				sendEvent(AgentEvent{Type: "message_delta", Data: MessageDeltaEvent{
+					BlockType: contentBlockThinking,
+					Content:   thinkingBlock.Thinking,
+				}})
 			}
 		}
 
 		if deltaEvent, ok := event.AsAny().(anthropic.BetaRawContentBlockDeltaEvent); ok {
 			if textDelta, ok := deltaEvent.Delta.AsAny().(anthropic.BetaTextDelta); ok && textDelta.Text != "" {
-				contentBuilder.WriteString(textDelta.Text)
-				sendEvent(SSEEvent{Event: "message", Data: map[string]string{"content": textDelta.Text}})
+				sendEvent(AgentEvent{Type: "message_delta", Data: MessageDeltaEvent{
+					BlockType: contentBlockText,
+					Content:   textDelta.Text,
+				}})
 			}
 			if thinkingDelta, ok := deltaEvent.Delta.AsAny().(anthropic.BetaThinkingDelta); ok && thinkingDelta.Thinking != "" {
-				thinkingBuilder.WriteString(thinkingDelta.Thinking)
-				sendEvent(SSEEvent{Event: "think", Data: map[string]string{"content": thinkingDelta.Thinking}})
+				sendEvent(AgentEvent{Type: "message_delta", Data: MessageDeltaEvent{
+					BlockType: contentBlockThinking,
+					Content:   thinkingDelta.Thinking,
+				}})
 			}
 		}
 	}
-
 	if err := stream.Err(); err != nil {
-		return anthropic.BetaMessage{}, "", "", nil, err
+		return AgentMessage{}, err
 	}
 
-	toolCalls := anthropicToolCallsToStreamedToolCalls(message)
-	content := contentBuilder.String()
-	if content == "" {
-		content = anthropicMessageText(message)
-	}
-	thinking := thinkingBuilder.String()
-	if thinking == "" {
-		thinking = anthropicMessageThinking(message)
-	}
+	klog.V(2).Infof("Anthropic usage: input=%d cache_read=%d cache_write=%d output=%d",
+		message.Usage.InputTokens, message.Usage.CacheReadInputTokens,
+		message.Usage.CacheCreationInputTokens, message.Usage.OutputTokens)
 
-	return message, content, thinking, toolCalls, nil
-}
-
-func anthropicToolCallsToStreamedToolCalls(message anthropic.BetaMessage) []streamedToolCall {
-	toolCalls := make([]streamedToolCall, 0)
-	for idx, block := range message.Content {
-		toolUse, ok := block.AsAny().(anthropic.BetaToolUseBlock)
-		if !ok {
-			continue
+	blocks := make([]ContentBlock, 0, len(message.Content))
+	for _, content := range message.Content {
+		switch block := content.AsAny().(type) {
+		case anthropic.BetaTextBlock:
+			blocks = append(blocks, ContentBlock{Type: contentBlockText, Text: block.Text})
+		case anthropic.BetaThinkingBlock:
+			blocks = append(blocks, ContentBlock{
+				Type:      contentBlockThinking,
+				Text:      block.Thinking,
+				Signature: block.Signature,
+			})
+		case anthropic.BetaRedactedThinkingBlock:
+			blocks = append(blocks, ContentBlock{Type: contentBlockRedactedThinking, Data: block.Data})
+		case anthropic.BetaToolUseBlock:
+			rawArguments := toolArgsJSON(block.Input)
+			args := map[string]interface{}{}
+			argumentError := ""
+			if err := json.Unmarshal([]byte(rawArguments), &args); err != nil {
+				argumentError = err.Error()
+			}
+			blocks = append(blocks, ContentBlock{
+				Type:          contentBlockToolCall,
+				ToolCallID:    block.ID,
+				ToolName:      block.Name,
+				Arguments:     args,
+				RawArguments:  rawArguments,
+				ArgumentError: argumentError,
+			})
 		}
-		toolCalls = append(toolCalls, streamedToolCall{
-			Index:     int64(idx),
-			ID:        toolUse.ID,
-			Name:      toolUse.Name,
-			Arguments: toolArgsJSON(toolUse.Input),
-		})
 	}
-	return toolCalls
-}
 
-func anthropicMessageText(message anthropic.BetaMessage) string {
-	var contentBuilder strings.Builder
-	for _, block := range message.Content {
-		textBlock, ok := block.AsAny().(anthropic.BetaTextBlock)
-		if !ok || textBlock.Text == "" {
-			continue
-		}
-		contentBuilder.WriteString(textBlock.Text)
-	}
-	return contentBuilder.String()
-}
-
-func anthropicMessageThinking(message anthropic.BetaMessage) string {
-	var thinkingBuilder strings.Builder
-	for _, block := range message.Content {
-		thinkingBlock, ok := block.AsAny().(anthropic.BetaThinkingBlock)
-		if !ok || thinkingBlock.Thinking == "" {
-			continue
-		}
-		thinkingBuilder.WriteString(thinkingBlock.Thinking)
-	}
-	return thinkingBuilder.String()
+	return AgentMessage{
+		Role:       messageRoleAssistant,
+		Content:    blocks,
+		StopReason: string(message.StopReason),
+	}, nil
 }

@@ -10,6 +10,8 @@ import (
 	"github.com/zxh326/kite/pkg/common"
 	pkgmodel "github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
 type toolPermission struct {
@@ -29,9 +31,10 @@ func permissionNamespace(resource resourceInfo, namespace string) string {
 	return namespace
 }
 
+//nolint:gocyclo // one case per tool; the permission mapping is intentionally kept in a single table
 func requiredToolPermissions(ctx context.Context, cs *cluster.ClientSet, toolName string, args map[string]interface{}) ([]toolPermission, error) {
 	switch toolName {
-	case "get_resource":
+	case "get_resource", "describe_resource":
 		kind, err := getRequiredString(args, "kind")
 		if err != nil {
 			return nil, err
@@ -68,6 +71,16 @@ func requiredToolPermissions(ctx context.Context, cs *cluster.ClientSet, toolNam
 			Verb:      string(common.VerbLog),
 			Namespace: namespace,
 		}}, nil
+	case "exec_in_pod":
+		options, err := parseExecInPodOptions(args)
+		if err != nil {
+			return nil, err
+		}
+		return []toolPermission{{
+			Resource:  string(common.Pods),
+			Verb:      string(common.VerbExec),
+			Namespace: options.Namespace,
+		}}, nil
 	case "get_cluster_overview":
 		return []toolPermission{
 			{Resource: string(common.Nodes), Verb: string(common.VerbGet), Namespace: ""},
@@ -84,6 +97,34 @@ func requiredToolPermissions(ctx context.Context, cs *cluster.ClientSet, toolNam
 		return []toolPermission{{
 			Resource:  common.HistoryResourceType(resource.Resource, resource.Group),
 			Verb:      string(common.VerbCreate),
+			Namespace: permissionNamespace(resource, obj.GetNamespace()),
+		}}, nil
+	case "apply_resource":
+		obj, err := parseResourceYAML(args)
+		if err != nil {
+			return nil, err
+		}
+		resource := resolveResourceInfoForObject(ctx, cs, obj)
+		// Probing for an existing object is what decides create-vs-update. When
+		// no cluster client is available the probe is impossible, and update is
+		// the safe default: apply overwrites an existing resource, so falling
+		// back to create would let a create-only user mutate one.
+		verb := common.VerbUpdate
+		if cs != nil && cs.K8sClient != nil {
+			existing := buildObjectForResource(resource)
+			err = cs.K8sClient.Get(ctx, k8stypes.NamespacedName{
+				Name:      obj.GetName(),
+				Namespace: normalizeNamespace(resource, obj.GetNamespace()),
+			}, existing)
+			if apierrors.IsNotFound(err) {
+				verb = common.VerbCreate
+			} else if err != nil {
+				return nil, err
+			}
+		}
+		return []toolPermission{{
+			Resource:  common.HistoryResourceType(resource.Resource, resource.Group),
+			Verb:      string(verb),
 			Namespace: permissionNamespace(resource, obj.GetNamespace()),
 		}}, nil
 	case "update_resource":
@@ -223,14 +264,20 @@ func ExecuteTool(ctx context.Context, c *gin.Context, cs *cluster.ClientSet, too
 	switch toolName {
 	case "get_resource":
 		return executeGetResource(ctx, cs, args)
+	case "describe_resource":
+		return executeDescribeResource(ctx, cs, args)
 	case "list_resources":
 		return executeListResources(ctx, cs, args)
 	case "get_pod_logs":
 		return executeGetPodLogs(ctx, cs, args)
+	case "exec_in_pod":
+		return executeExecInPod(ctx, cs, args)
 	case "get_cluster_overview":
 		return executeGetClusterOverview(ctx, cs)
 	case "create_resource":
 		return executeCreateResource(ctx, cs, user, args)
+	case "apply_resource":
+		return executeApplyResource(ctx, cs, user, args)
 	case "update_resource":
 		return executeUpdateResource(ctx, cs, user, args)
 	case "patch_resource":

@@ -14,21 +14,29 @@ import (
 // (not flattened to text), roles stay alternating, and any tool-call text a
 // previous broken turn leaked into assistant content is stripped.
 func TestToAnthropicMessagesRebuildsToolRoundTrip(t *testing.T) {
-	history := []ChatMessage{
-		{Role: "user", Content: "find pod nginx"},
-		{Role: "assistant", Content: "Let me check."},
-		{
-			Role:       "tool",
+	history := []AgentMessage{
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "find pod nginx"}}},
+		{Role: messageRoleAssistant, Content: []ContentBlock{{Type: contentBlockText, Text: "Let me check."}}},
+		{Role: messageRoleAssistant, Content: []ContentBlock{{
+			Type:       contentBlockToolCall,
 			ToolCallID: "toolu_1",
 			ToolName:   "get_resource",
-			ToolArgs:   map[string]interface{}{"kind": "Pod", "name": "nginx"},
-			ToolResult: "status: Running",
-		},
-		{Role: "assistant", Content: "It is running. [Tool: get_resource] <invoke name=\"get_resource\"><parameter name=\"kind\">Pod</parameter></invoke>"},
-		{Role: "user", Content: "is it healthy?"},
+			Arguments:  map[string]interface{}{"kind": "Pod", "name": "nginx"},
+		}}},
+		{Role: messageRoleTool, Content: []ContentBlock{{
+			Type:       contentBlockToolResult,
+			ToolCallID: "toolu_1",
+			ToolName:   "get_resource",
+			Text:       "status: Running",
+		}}},
+		{Role: messageRoleAssistant, Content: []ContentBlock{{
+			Type: contentBlockText,
+			Text: "It is running. [Tool: get_resource] <invoke name=\"get_resource\"><parameter name=\"kind\">Pod</parameter></invoke>",
+		}}},
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "is it healthy?"}}},
 	}
 
-	msgs := toAnthropicMessages(history)
+	msgs := toAnthropicMessages(normalizeAgentMessages(history, anthropicLimits))
 
 	var sawToolUse, sawToolResult bool
 	for _, m := range msgs {
@@ -95,14 +103,26 @@ func TestToAnthropicMessagesRebuildsToolRoundTrip(t *testing.T) {
 	}
 }
 
-func TestToAnthropicMessagesDropsLeadingNonUser(t *testing.T) {
+func TestNormalizeAgentMessagesDropsLeadingToolTurn(t *testing.T) {
 	// A history that (after truncation) would start with an orphaned tool turn
-	// must be trimmed so the first provider message is a user turn.
-	history := []ChatMessage{
-		{Role: "tool", ToolCallID: "toolu_x", ToolName: "get_resource", ToolResult: "ok"},
-		{Role: "user", Content: "hello"},
+	// must be trimmed so the first provider message is a user turn — a leading
+	// tool_result with no preceding tool_use is an invalid request.
+	history := []AgentMessage{
+		{Role: messageRoleTool, Content: []ContentBlock{{
+			Type:       contentBlockToolResult,
+			ToolCallID: "toolu_x",
+			ToolName:   "get_resource",
+			Text:       "ok",
+		}}},
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "hello"}}},
 	}
-	msgs := toAnthropicMessages(history)
+
+	normalized := normalizeAgentMessages(history, anthropicLimits)
+	if len(normalized) == 0 || normalized[0].Role != messageRoleUser {
+		t.Fatalf("expected the leading tool turn dropped, got %#v", normalized)
+	}
+
+	msgs := toAnthropicMessages(normalized)
 	if len(msgs) == 0 || string(msgs[0].Role) != "user" {
 		t.Fatalf("expected first message to be user, got %#v", msgs)
 	}
@@ -165,19 +185,24 @@ func TestAnthropicModelSupportsModernFeatures(t *testing.T) {
 	}
 }
 
-func TestNormalizeChatMessagesUsesSeparateToolResultBudget(t *testing.T) {
+func TestNormalizeAgentMessagesUsesSeparateToolResultBudget(t *testing.T) {
 	// A user message and a tool result of the same size must be cut against
 	// their own budgets: user content is human-authored and gets the generous
 	// cap, tool results are model-sized and get the tight one.
 	const userCap, toolCap = 5000, 500
 	body := strings.Repeat("x", 2000)
-	msgs := []ChatMessage{
-		{Role: "user", Content: body},
-		{Role: "tool", ToolCallID: "t1", ToolName: "get_pod_logs", ToolResult: body},
-		{Role: "user", Content: "follow-up"},
+	msgs := []AgentMessage{
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: body}}},
+		{Role: messageRoleTool, Content: []ContentBlock{{
+			Type:       contentBlockToolResult,
+			ToolCallID: "t1",
+			ToolName:   "get_pod_logs",
+			Text:       body,
+		}}},
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "follow-up"}}},
 	}
 
-	out := normalizeChatMessages(msgs, conversationLimits{
+	out := normalizeAgentMessages(msgs, conversationLimits{
 		maxMessages:        100,
 		maxChars:           userCap,
 		maxToolResultChars: toolCap,
@@ -186,18 +211,20 @@ func TestNormalizeChatMessagesUsesSeparateToolResultBudget(t *testing.T) {
 
 	var sawUser, sawTool bool
 	for _, m := range out {
-		switch m.Role {
-		case "user":
-			if m.Content == body {
-				sawUser = true // fits under userCap → untouched
-			}
-		case "tool":
-			sawTool = true
-			if n := len([]rune(m.ToolResult)); n > toolCap {
-				t.Fatalf("tool result must respect its own cap %d, got %d", toolCap, n)
-			}
-			if !strings.HasSuffix(m.ToolResult, truncationNotice) {
-				t.Fatalf("truncated tool result must carry the notice")
+		for _, b := range m.Content {
+			switch b.Type {
+			case contentBlockText:
+				if b.Text == body {
+					sawUser = true // fits under userCap → untouched
+				}
+			case contentBlockToolResult:
+				sawTool = true
+				if n := len([]rune(b.Text)); n > toolCap {
+					t.Fatalf("tool result must respect its own cap %d, got %d", toolCap, n)
+				}
+				if !strings.HasSuffix(b.Text, truncationNotice) {
+					t.Fatalf("truncated tool result must carry the notice")
+				}
 			}
 		}
 	}
@@ -243,10 +270,10 @@ func TestTrimToTotalBudgetDropsOldestMessages(t *testing.T) {
 	// Per-message caps cannot bound a request; the aggregate budget is what the
 	// provider's context window actually limits.
 	body := strings.Repeat("x", 1000)
-	msgs := []ChatMessage{
-		{Role: "user", Content: body},
-		{Role: "assistant", Content: body},
-		{Role: "user", Content: body},
+	msgs := []AgentMessage{
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: body}}},
+		{Role: messageRoleAssistant, Content: []ContentBlock{{Type: contentBlockText, Text: body}}},
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: body}}},
 	}
 
 	out := trimToTotalBudget(msgs, 2500)
@@ -255,7 +282,9 @@ func TestTrimToTotalBudgetDropsOldestMessages(t *testing.T) {
 	}
 	total := 0
 	for _, m := range out {
-		total += len([]rune(m.Content))
+		for _, b := range m.Content {
+			total += len([]rune(b.Text))
+		}
 	}
 	if total > 2500 {
 		t.Fatalf("transcript must fit the budget, got %d runes", total)
@@ -272,11 +301,15 @@ func TestTrimToTotalBudgetDropsOldestMessages(t *testing.T) {
 		t.Fatalf("expected the newest message retained, got %d", len(got))
 	}
 
-	// Tool results count against the budget, not just Content.
-	toolMsgs := []ChatMessage{
-		{Role: "tool", ToolCallID: "t1", ToolName: "x", ToolResult: body},
-		{Role: "tool", ToolCallID: "t2", ToolName: "x", ToolResult: body},
-		{Role: "user", Content: "now"},
+	// Tool results count against the budget, not just assistant/user text.
+	toolMsgs := []AgentMessage{
+		{Role: messageRoleTool, Content: []ContentBlock{{
+			Type: contentBlockToolResult, ToolCallID: "t1", ToolName: "x", Text: body,
+		}}},
+		{Role: messageRoleTool, Content: []ContentBlock{{
+			Type: contentBlockToolResult, ToolCallID: "t2", ToolName: "x", Text: body,
+		}}},
+		{Role: messageRoleUser, Content: []ContentBlock{{Type: contentBlockText, Text: "now"}}},
 	}
 	if got := trimToTotalBudget(toolMsgs, 1500); len(got) != 2 {
 		t.Fatalf("tool results must count toward the budget, got %d messages", len(got))
@@ -297,6 +330,36 @@ func TestStripLeakedToolCalls(t *testing.T) {
 	clean := "the pod is running normally"
 	if stripLeakedToolCalls(clean) != clean {
 		t.Fatalf("clean prose was modified: %q", stripLeakedToolCalls(clean))
+	}
+}
+
+func TestAnthropicSystemBlocksCachesStablePrefix(t *testing.T) {
+	// The fixed prompt must ride in its own cache_control block and the volatile
+	// per-request context in a separate uncached one — a timestamp inside the
+	// cached block would invalidate the prefix on every single request.
+	suffix := "\n\nCurrent system time: 2026-08-17 10:00:00 UTC"
+	blocks := anthropicSystemBlocks(systemPrompt + suffix)
+	if len(blocks) != 2 {
+		t.Fatalf("expected a cached prefix and an uncached suffix, got %d block(s)", len(blocks))
+	}
+	if blocks[0].Text != systemPrompt {
+		t.Fatal("the cached block must hold exactly the stable system prompt")
+	}
+	if blocks[0].CacheControl.Type == "" {
+		t.Fatal("the stable prefix must carry cache_control")
+	}
+	if blocks[1].Text != suffix {
+		t.Fatalf("the uncached block must hold the volatile suffix, got %q", blocks[1].Text)
+	}
+	if blocks[1].CacheControl.Type != "" {
+		t.Fatal("the volatile suffix must not be cached")
+	}
+
+	// A prompt that does not start with the stable prefix (a caller that built
+	// it differently) still has to produce a valid single-block system.
+	single := anthropicSystemBlocks("custom prompt")
+	if len(single) != 1 || single[0].Text != "custom prompt" {
+		t.Fatalf("unexpected fallback blocks: %#v", single)
 	}
 }
 

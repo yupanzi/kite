@@ -21,12 +21,12 @@ func newTestStreamContext() (*gin.Context, *httptest.ResponseRecorder) {
 	return c, rec
 }
 
-func TestNewStreamSenderSetsStreamingHeaders(t *testing.T) {
+func TestPrepareSSESetsStreamingHeaders(t *testing.T) {
 	c, rec := newTestStreamContext()
-	send, stop := newStreamSender(c)
+	send, stop := prepareSSE(c)
 	defer stop()
 
-	send(SSEEvent{Event: "message", Data: map[string]string{"text": "hi"}})
+	send(AgentEvent{Type: "message", Data: MessageDeltaEvent{BlockType: contentBlockText, Content: "hi"}})
 	stop()
 
 	// X-Accel-Buffering is the one that matters behind ingress-nginx: without it
@@ -46,20 +46,20 @@ func TestNewStreamSenderSetsStreamingHeaders(t *testing.T) {
 	}
 }
 
-func TestNewStreamSenderEmitsKeepaliveWhileIdle(t *testing.T) {
+func TestPrepareSSEEmitsKeepaliveWhileIdle(t *testing.T) {
 	// The interval is a const sized for nginx's 60s default, far too long for a
 	// test, so drive the same write path concurrently instead: this asserts the
 	// comment-line format and — under -race — that the ticker goroutine and a
 	// real event cannot interleave on the ResponseWriter.
 	c, rec := newTestStreamContext()
-	send, stop := newStreamSender(c)
+	send, stop := prepareSSE(c)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			send(SSEEvent{Event: "message", Data: map[string]string{"text": "chunk"}})
+			send(AgentEvent{Type: "message", Data: MessageDeltaEvent{BlockType: contentBlockText, Content: "chunk"}})
 		}()
 	}
 	wg.Wait()
@@ -82,7 +82,7 @@ func TestStopKeepaliveIsIdempotent(t *testing.T) {
 	// Every handler both defers stop() and calls it before the final done event,
 	// so the second call must not panic on a closed channel.
 	c, _ := newTestStreamContext()
-	_, stop := newStreamSender(c)
+	_, stop := prepareSSE(c)
 	stop()
 	stop()
 	stop()
@@ -94,7 +94,7 @@ func TestKeepaliveStopsWhenRequestContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	c.Request = c.Request.WithContext(ctx)
 
-	_, stop := newStreamSender(c)
+	_, stop := prepareSSE(c)
 	defer stop()
 
 	cancel()

@@ -209,6 +209,10 @@ func TestRequiredToolPermissionsCoverAllTools(t *testing.T) {
 		"patch":       `{"metadata":{}}`,
 		"query":       "up",
 		"values_yaml": "replicaCount: 2\n",
+		// exec_in_pod parses its options before resolving permissions, so the
+		// shared fixture has to satisfy its required arguments too.
+		"command":         []interface{}{"cat", "/etc/os-release"},
+		"timeout_seconds": float64(30),
 	}
 	mutatingVerbs := map[string]bool{
 		string(common.VerbCreate): true,

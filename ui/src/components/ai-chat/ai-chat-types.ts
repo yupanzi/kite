@@ -64,20 +64,19 @@ export interface ChatSession {
   clusterName?: string
 }
 
-// Wire format sent to POST /api/v1/ai/chat. Tool turns are sent structurally
-// (not flattened to "[Tool: ...]" text) so the backend can rebuild real
-// tool_use / tool_result blocks — feeding tool calls back as plain text
-// poisons the model into emitting textual/XML tool calls on later turns.
-export type APIChatMessage =
-  | { role: 'user' | 'assistant'; content: string }
-  | {
-      role: 'tool'
-      tool_call_id: string
-      tool_name: string
-      tool_args?: Record<string, unknown>
-      tool_result: string
-      is_error?: boolean
-    }
+export interface APIAgentContentBlock {
+  type: 'text' | 'tool_call' | 'tool_result'
+  text?: string
+  tool_call_id?: string
+  tool_name?: string
+  arguments?: Record<string, unknown>
+  is_error?: boolean
+}
+
+export interface APIAgentMessage {
+  role: 'user' | 'assistant' | 'tool'
+  content: APIAgentContentBlock[]
+}
 
 export interface AIChatState {
   messages: ChatMessage[]
