@@ -139,8 +139,12 @@ format: ## Format code
 	go fmt ./...
 	cd $(UI_DIR) && pnpm run format
 
+type-check: ## Type-check the frontend
+	@echo "🔎 Type-checking frontend..."
+	cd $(UI_DIR) && pnpm run type-check
+
 # Pre-commit checks
-pre-commit: format lint ## Run pre-commit checks
+pre-commit: format lint type-check ## Run pre-commit checks
 	@echo "✅ Pre-commit checks completed!"
 
 test: ## Run tests

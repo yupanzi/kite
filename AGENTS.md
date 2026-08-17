@@ -27,8 +27,13 @@ make build      # frontend + backend
 make dev        # run Go backend and Vite dev server
 make lint       # go vet, golangci-lint, frontend eslint
 make format     # go fmt and frontend prettier
+make type-check # frontend tsc -b --noEmit
 make pre-commit # required before committing
 ```
+
+Frontend type errors only surface under `tsc -b` (build mode), because
+`ui/tsconfig.json` is a references-only solution file that checks nothing on its
+own. Keep `type-check` on `tsc -b` and keep it in `pre-commit`.
 
 Backend-only checks can be run directly:
 
