@@ -164,7 +164,7 @@ export function buildToolPreview(
     case 'update_helm_release_values': {
       const valuesYaml = args.values_yaml
       return typeof valuesYaml === 'string' && valuesYaml.trim()
-        ? valuesYaml.trim()
+        ? { label: 'YAML', content: valuesYaml.trim() }
         : null
     }
     default:
