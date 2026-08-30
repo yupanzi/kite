@@ -1,0 +1,84 @@
+# CI for `master`, the fork's trunk.
+#
+# Upstream's ci.yml and e2e.yml both trigger on `main` only. In this fork `main`
+# is an exact upstream mirror (see sync-upstream.yml), so those workflows only
+# ever re-check code upstream already checked, and `master` — where every local
+# change actually lands — ran no CI at all. Its only coverage was
+# internal-release.yml, which is a *publish* pipeline: when it fails the bad
+# commit is already on master and the release is what breaks.
+#
+# This is a separate file rather than an edit to upstream's ci.yml on purpose:
+# the fork adds workflows but never modifies upstream ones, which is why
+# .github/ has never produced a sync conflict.
+#
+# Scope is the checks internal-release.yml does not run: lint, type-check, and
+# tests on both sides. It runs alongside the release rather than gating it —
+# a red run here means "master needs a follow-up commit", not "nothing shipped".
+name: Fork CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26"
+  NODE_VERSION: "24"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'yupanzi/kite' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          check-latest: true
+
+      - name: Install frontend deps
+        run: pnpm --dir ui install --frozen-lockfile
+
+      # `static/` is gitignored and static.go carries `//go:embed static`, so
+      # nothing on the Go side compiles — not vet, not lint, not test — until
+      # the frontend has been built at least once.
+      - name: Build frontend
+        run: pnpm --dir ui run build
+
+      - name: Frontend lint
+        run: pnpm --dir ui run lint
+      - name: Frontend type-check
+        run: pnpm --dir ui run type-check
+      - name: Frontend test
+        run: pnpm --dir ui run test
+
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.4
+      - name: Go test
+        run: go test ./...

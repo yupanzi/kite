@@ -4,8 +4,19 @@
 #                                                     │
 #                                                     └──(merge)──▶ fork master (primary branch)
 #
-# A real merge conflict fails the job; resolve it locally with
-# scripts/sync-upstream.sh (or `git merge` on master) and push.
+# The merge is pushed to master only after the merged tree is proven to build.
+# `git merge` reconciles text, not semantics: this fork's pkg/ai and
+# ui/src/components/ai-chat customisations sit on files upstream refactors
+# often, so a merge can come out clean and still not compile. That is what put
+# a broken Go call site (2026-08-04) and a broken TS type (2026-08-17) on
+# master, where only the release pipeline caught them.
+#
+# On a text conflict OR a failed build the merge is discarded, master is left
+# untouched, and a main -> master pull request is opened for manual resolution.
+# The PR is idempotent: the job fails once when it opens the PR, then stays
+# quiet while it is open, instead of mailing an identical failure every day.
+# Resolve it locally with scripts/sync-upstream.sh (or `git merge` on master)
+# and push; GitHub closes the PR once master contains main.
 #
 # REQUIRES the SYNC_TOKEN repository secret: a PAT with push access AND workflow
 # rights (classic PAT: repo + workflow scopes; fine-grained PAT: Contents and
@@ -37,6 +48,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: sync-upstream
@@ -45,6 +57,8 @@ concurrency:
 env:
   UPSTREAM_URL: ${{ inputs.upstream_url || 'https://github.com/kite-org/kite.git' }}
   UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
+  GO_VERSION: "1.26"
+  NODE_VERSION: "24"
 
 jobs:
   sync:
@@ -64,19 +78,116 @@ jobs:
       - name: Mirror upstream main -> fork main
         run: git push --force origin "refs/remotes/upstream/main:refs/heads/main"
 
+      # Merge locally only. The push is deferred until the build gate below has
+      # proven the merged tree compiles.
       - name: Merge upstream main into master
+        id: merge
         run: |
           set -eu
           if git merge-base --is-ancestor refs/remotes/upstream/main HEAD; then
             echo "master already contains upstream main; nothing to merge."
+            echo "state=uptodate" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git merge --no-edit --no-ff refs/remotes/upstream/main \
+          if git merge --no-edit --no-ff refs/remotes/upstream/main \
               -m "chore: auto-sync upstream main into master ($(date -u +%F))"; then
+            echo "state=merged" >> "$GITHUB_OUTPUT"
+          else
             git merge --abort || true
-            echo "CONFLICT merging upstream main into master. Run scripts/sync-upstream.sh locally, resolve, and push." >&2
+            echo "state=conflict" >> "$GITHUB_OUTPUT"
+            echo "::warning::Text conflict merging upstream main into master; opening a sync PR."
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.merge.outputs.state == 'merged'
+        with:
+          version: 10
+      - name: Setup Node.js
+        if: steps.merge.outputs.state == 'merged'
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - name: Setup Go
+        if: steps.merge.outputs.state == 'merged'
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          check-latest: true
+
+      # The build gate. `static/` is gitignored and static.go carries
+      # `//go:embed static`, so the frontend must be built first or the backend
+      # cannot compile at all. These are the same two commands that caught the
+      # 2026-08-04 Go and 2026-08-17 TS breakages inside internal-release.yml;
+      # the only change is that they now run *before* the push instead of after,
+      # so a merge that does not compile never reaches master in the first place.
+      # continue-on-error keeps a failure from ending the job here: the PR
+      # fallback below needs to run and own the exit code.
+      - name: Verify the merged tree builds
+        id: verify
+        if: steps.merge.outputs.state == 'merged'
+        continue-on-error: true
+        run: |
+          set -eu
+          pnpm --dir ui install --frozen-lockfile
+          pnpm --dir ui run build
+          test -d static
+          go build ./...
+
+      - name: Push master
+        if: steps.merge.outputs.state == 'merged' && steps.verify.outcome == 'success'
+        run: git push origin master
+
+      # Reached when the merge conflicted, or merged but failed to build. master
+      # is untouched either way; main already mirrors upstream, so it is the
+      # head branch and GitHub renders the conflicting files itself.
+      - name: Open a sync PR for manual resolution
+        if: steps.merge.outputs.state == 'conflict' || (steps.merge.outputs.state == 'merged' && steps.verify.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          STATE: ${{ steps.merge.outputs.state }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          if [ "$STATE" = "conflict" ]; then
+            REASON="upstream main does not merge cleanly into master (text conflict)"
+          else
+            REASON="the merge was clean but the merged tree does not build (semantic conflict) — see [the build gate output]($RUN_URL)"
+          fi
+
+          # A token without pull-request access fails here. Say so explicitly:
+          # the sync is already blocked, and a bare gh error would read as the
+          # cause rather than as a second, separate problem.
+          if ! EXISTING=$(gh pr list --base master --head main --state open --json url --jq '.[0].url // ""' 2>&1); then
+            echo "::error::Sync blocked: $REASON. Could not reach the pull request API either — grant SYNC_TOKEN pull-request access (classic PAT: repo; fine-grained: Pull requests read/write). gh said: $EXISTING"
             exit 1
           fi
+          if [ -n "$EXISTING" ]; then
+            echo "Sync PR already open: $EXISTING — master is untouched, nothing new to report."
+            exit 0
+          fi
+
+          if ! gh pr create --base master --head main \
+            --title "chore: sync upstream main into master (needs manual resolution)" \
+            --body "The daily sync could not advance \`master\` on its own: $REASON.
+
+          \`master\` was left untouched and \`main\` still mirrors upstream exactly.
+
+          To resolve locally:
+
+          \`\`\`bash
+          scripts/sync-upstream.sh   # fetches, mirrors, merges; resolve conflicts it reports
+          make pre-commit            # the merged tree must build before you push
           git push origin master
+          \`\`\`
+
+          This PR closes itself once \`master\` contains \`main\`. While it is open the daily sync stays quiet instead of re-reporting the same failure."; then
+            echo "::error::Sync blocked: $REASON. Opening the PR also failed — grant SYNC_TOKEN pull-request access (classic PAT: repo; fine-grained: Pull requests read/write)."
+            exit 1
+          fi
+          echo "::error::Sync blocked: $REASON. A PR was opened for manual resolution."
+          exit 1
