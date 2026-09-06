@@ -39,7 +39,9 @@ clean merge can still fail to compile — that is how a broken Go call site and 
 broken TS type each reached `master` before the gate existed. On a text conflict
 or a failed build, `master` is left untouched and a `main` -> `master` PR is
 opened; resolve it with `scripts/sync-upstream.sh`, verify with `make
-pre-commit` *and* `go test ./...`, then push. `pre-commit` is `format lint
+pre-commit` *and* `go test ./...`, then push. While that PR is open the daily
+sync keeps failing on purpose — it used to exit 0 once the PR existed, which
+made every later run green while `master` fell four days behind upstream. `pre-commit` is `format lint
 type-check` and runs no Go tests, so it stays green on a resolution that
 reverts fork behaviour a fork-only test asserts — and a fork-only test never
 conflicts, so it survives a wholesale "take upstream" and only fails

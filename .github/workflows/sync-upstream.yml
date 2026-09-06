@@ -166,9 +166,15 @@ jobs:
             echo "::error::Sync blocked: $REASON. Could not reach the pull request API either — grant SYNC_TOKEN pull-request access (classic PAT: repo; fine-grained: Pull requests read/write). gh said: $EXISTING"
             exit 1
           fi
+          # Keep failing while the PR is open. Exiting 0 here once made every
+          # subsequent run green, and master sat four days behind upstream
+          # (2026-09-02 to 09-06) with the Actions list showing nothing but
+          # successes. A daily red run is the cheaper error: the noise stops as
+          # soon as someone resolves the PR, whereas the silence does not.
           if [ -n "$EXISTING" ]; then
-            echo "Sync PR already open: $EXISTING — master is untouched, nothing new to report."
-            exit 0
+            BEHIND=$(git rev-list --count HEAD..refs/remotes/upstream/main)
+            echo "::error::Sync blocked: $REASON. $EXISTING is already open and master is $BEHIND commit(s) behind upstream — resolve that PR to restore the sync."
+            exit 1
           fi
 
           if ! gh pr create --base master --head main \
@@ -182,10 +188,11 @@ jobs:
           \`\`\`bash
           scripts/sync-upstream.sh   # fetches, mirrors, merges; resolve conflicts it reports
           make pre-commit            # the merged tree must build before you push
+          go test ./...              # pre-commit runs no Go tests; fork-only tests catch reverted fork behaviour
           git push origin master
           \`\`\`
 
-          This PR closes itself once \`master\` contains \`main\`. While it is open the daily sync stays quiet instead of re-reporting the same failure."; then
+          This PR closes itself once \`master\` contains \`main\`. Until then the daily sync keeps failing on purpose, so the block stays visible in the Actions list."; then
             echo "::error::Sync blocked: $REASON. Opening the PR also failed — grant SYNC_TOKEN pull-request access (classic PAT: repo; fine-grained: Pull requests read/write)."
             exit 1
           fi
