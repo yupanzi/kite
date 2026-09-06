@@ -1,7 +1,7 @@
 @font-face {
   font-family: "Cormorant Garamond";
   font-style: normal;
-  font-display: block;
+  font-display: swap;
   font-weight: 400;
   src: url("/assets/fonts/cormorant-garamond-latin-400-normal.woff2")
     format("woff2");
@@ -66,12 +66,30 @@ a:focus-visible {
   outline-offset: 4px;
 }
 
+.skip-link {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 20;
+  padding: 10px 14px;
+  color: white;
+  background: var(--blue);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .site-shell {
   width: min(1320px, calc(100% - 64px));
   margin-inline: auto;
 }
 
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   border-bottom: 1px solid rgba(203, 209, 216, 0.68);
   background: rgba(250, 249, 246, 0.96);
 }
@@ -109,7 +127,9 @@ a:focus-visible {
 }
 
 .site-nav > a:not(.star-count) {
-  padding-block: 8px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .site-nav > a:hover,
@@ -564,8 +584,8 @@ a:focus-visible {
     font-size: 12px;
   }
 
-  .nav__optional,
-  .star-count {
+  .site-nav > a.nav__optional,
+  .site-nav > a.star-count {
     display: none;
   }
 

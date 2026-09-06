@@ -1,64 +1,46 @@
 # What is Kite?
 
-Kite is a lightweight, modern Kubernetes dashboard that unifies real-time observability, multi-cluster and resource management, enterprise-grade user governance (OAuth, MFA, passkeys, RBAC, and audit logs), and AI agents in one workspace. Not just a tool, but more like a platform.
+Kite is a lightweight, open-source Kubernetes workspace for platform teams. It brings multi-cluster operations, observability, access control, and AI-assisted troubleshooting into one interface.
 
-![Dashboard Overview](/screenshots/overview.png)
+![Kite dashboard showing cluster health, workloads, events, and resource usage](/screenshots/overview.png)
 
-## ✨ Features
+## Start here
 
-### User Interface
+::: tip Fastest evaluation path
+Install Kite with Helm, use port forwarding for the first visit, then connect the in-cluster Kubernetes API. You can complete the initial setup without preparing a kubeconfig.
+:::
 
-- Dark/light/color themes with system preference detection
-- Global search across all resources
-- Responsive design for desktop, tablet, and mobile
-- i18n support (English and Chinese)
+1. [Install Kite](./installation) and open the dashboard.
+2. [Set up users](/config/user-management) and [RBAC](/config/rbac-config) before inviting your team.
+3. [Connect Prometheus](/config/prometheus-setup) when you are ready to add cluster metrics.
 
-### Multi-Cluster Management
+## Find the right guide
 
-- Switch between multiple Kubernetes clusters
-- Independent Prometheus configuration per cluster
-- Automatic discovery from kubeconfig
-- Fine-grained cluster access permissions
+- **Find any resource quickly:** [Global Search](./global-search)
+- **Understand a workload and its dependencies:** [Related Resources](./related-resources)
+- **Investigate a running Pod:** [Logs](./logs) and [Web Terminal](./web-terminal)
+- **Track cluster health and usage:** [Monitoring](./monitoring)
+- **Install and manage releases:** [Helm Management](./helm-management)
+- **Review resource changes:** [Resource History](./resource-history)
+- **Troubleshoot with an AI agent:** [AI Assistant](./ai-assistant)
+- **Connect private or remote clusters:** [Kite Cluster Agent](./kite-cluster-agent)
 
-### Resource Management
+## Platform at a glance
 
-- Full coverage: Pods, Deployments, Services, ConfigMaps, Secrets, PVs, PVCs, Nodes, and more
-- Live YAML editing with Monaco editor (syntax highlighting and validation)
-- Detailed views with containers, volumes, events, and conditions
-- Resource relationships (e.g., Deployment -> Pods)
-- Create, update, delete, scale, and restart operations
-- Custom Resource Definitions (CRDs) support
-- Quick image tag selector using Docker and container registry APIs
-- Customizable sidebar with CRD shortcuts
-- Kube proxy for direct pod/service access (no more `kubectl port-forward`)
+### Observe
 
-### Monitoring & Observability
+Use real-time CPU, memory, and network charts, live Pod logs, events, and resource relationships to move from a symptom to its context.
 
-- Real-time CPU, memory, and network charts (Prometheus)
-- Live pod logs with filtering and search
-- Web terminal for pods and nodes
-- Built-in kubectl console
-- AI assistant
+### Operate
 
-### Security
+Create and edit Kubernetes resources, manage Helm releases, open Pod and Node terminals, run kubectl, and access workloads through Kube Proxy.
 
-- OAuth integration
-- MFA for password users
-- Passkey login
-- Role-based access control
-- User management and role allocation
+### Govern
 
-## Kite vs Headlamp / Kubernetes Dashboard
+Manage team access with OAuth, MFA, passkeys, users, RBAC, role mappings, and audit logs across multiple clusters.
 
-Headlamp and Kubernetes Dashboard are strong cluster operation tools focused on resource inspection and control. Kite includes those dashboard capabilities, but is designed as a team platform:
+## Where Kite fits
 
-- Unified workspace for observability, multi-cluster operations, governance, and AI assistance
-- Built-in team governance with OAuth, MFA, passkeys, RBAC, user-role mapping, and audit logs
-- Operational workflows beyond resource views: web terminal, built-in kubectl console, and kube proxy
-- One system for operators, developers, and admins, instead of stitching separate tools
+Headlamp and Kubernetes Dashboard are strong tools for inspecting and operating individual clusters. Kite adds a shared workspace for multi-cluster operations, built-in team governance, observability, and AI-assisted workflows.
 
-In short: those products are dashboard tools; Kite is a platform for daily Kubernetes operations and collaboration.
-
-## Getting Started
-
-Ready to explore Kite? Check out the [installation guide](./installation).
+If you are evaluating Kite, continue with the [installation guide](./installation).

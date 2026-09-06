@@ -37,7 +37,7 @@ export default defineConfig({
           { text: "常见问题", link: "/zh/faq" },
         ],
         editLink: {
-          pattern: "https://github.com/zxh326/kite/tree/main/docs/:path",
+          pattern: "https://github.com/kite-org/kite/tree/main/docs/:path",
           text: "在 GitHub 上编辑此页面",
         },
       },
@@ -64,7 +64,7 @@ export default defineConfig({
     },
     langMenuLabel: "Language",
     editLink: {
-      pattern: "https://github.com/zxh326/kite/tree/main/docs/:path",
+      pattern: "https://github.com/kite-org/kite/tree/main/docs/:path",
       text: "Edit this page on GitHub",
     },
 
@@ -207,7 +207,7 @@ export default defineConfig({
       ],
     },
 
-    socialLinks: [{ icon: "github", link: "https://github.com/zxh326/kite" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/kite-org/kite" }],
 
     footer: {
       message: "Released under the Apache License.",

@@ -1,64 +1,46 @@
 # 什么是 Kite？
 
-Kite 是一个轻量级、现代化的 Kubernetes Dashboard，将实时可观测性、多集群与资源管理、企业级用户治理（OAuth、MFA、Passkey、RBAC 和审计日志）以及 AI Agent 集成到同一个工作空间中。它不只是一个工具，更像一个平台。
+Kite 是面向平台团队的轻量、开源 Kubernetes 工作空间，将多集群运维、可观测性、访问控制和 AI 辅助排障整合到同一个界面中。
 
-![Dashboard Overview](/screenshots/overview.png)
+![Kite 仪表盘展示集群健康状态、工作负载、事件和资源用量](/screenshots/overview.png)
 
-## ✨ 功能特性
+## 从这里开始
 
-### 用户界面
+::: tip 最快体验路径
+使用 Helm 安装 Kite，首次访问时通过端口转发打开界面，然后连接集群内的 Kubernetes API。整个初始设置不需要提前准备 kubeconfig。
+:::
 
-- 暗色/亮色/彩色主题，支持自动跟随系统偏好
-- 跨所有资源的全局搜索
-- 适配桌面、平板和移动端的响应式设计
-- 国际化支持（中文和英文）
+1. [安装 Kite](./installation) 并打开仪表盘。
+2. 邀请团队前，先配置[用户](/zh/config/user-management)和 [RBAC](/zh/config/rbac-config)。
+3. 需要集群指标时，再[连接 Prometheus](/zh/config/prometheus-setup)。
 
-### 多集群管理
+## 找到对应指南
 
-- 在多个 Kubernetes 集群间切换
-- 按集群独立配置 Prometheus
-- 自动从 kubeconfig 发现集群
-- 细粒度的集群访问权限控制
+- **快速找到任意资源：** [全局搜索](./global-search)
+- **了解工作负载及其依赖关系：** [相关资源](./related-resources)
+- **排查正在运行的 Pod：** [日志](./logs)与 [Web 终端](./web-terminal)
+- **查看集群健康状态和用量：** [监控](./monitoring)
+- **安装和管理应用：** [Helm 管理](./helm-management)
+- **审查资源变更：** [资源历史](./resource-history)
+- **使用 AI Agent 辅助排障：** [AI 助手](./ai-assistant)
+- **连接私有或远程集群：** [Kite Cluster Agent](./kite-cluster-agent)
 
-### 资源管理
+## 平台能力概览
 
-- 全面覆盖：Pods、Deployments、Services、ConfigMaps、Secrets、PVs、PVCs、Nodes、Helm Releases 等
-- 基于 Monaco 编辑器的实时 YAML 编辑（语法高亮和校验）
-- 提供容器、卷、事件和状态等详细视图
-- 资源关系展示（例如 Deployment -> Pods）
-- 支持创建、更新、删除、扩缩容和重启操作
-- 支持 CRD（Custom Resource Definitions）
-- 基于 Docker 和容器镜像仓库 API 的镜像标签快速选择器
-- 可自定义侧边栏并添加 CRD 快捷入口
-- 通过 Kube Proxy 直接访问 Pod/Service（无需 `kubectl port-forward`）
+### 观察
 
-### 监控与可观测性
+通过实时 CPU、内存和网络图表、Pod 日志、事件与资源关系，从异常现象快速定位所需上下文。
 
-- 实时 CPU、内存和网络图表（Prometheus）
-- 支持过滤和搜索的实时 Pod 日志
-- 面向 Pod 和 Node 的 Web 终端
-- 内置 kubectl 控制台
-- AI 助手
+### 运维
 
-### 安全
+创建和编辑 Kubernetes 资源、管理 Helm Release、打开 Pod 与 Node 终端、运行 kubectl，并通过 Kube Proxy 访问工作负载。
 
-- OAuth 集成
-- 密码用户 MFA
-- Passkey 登录
-- 基于角色的访问控制
-- 用户管理和角色分配
+### 治理
 
-## Kite 与 Headlamp / Kubernetes Dashboard 的差异
+使用 OAuth、MFA、Passkey、用户管理、RBAC、角色映射和审计日志，统一管理多集群中的团队访问。
 
-Headlamp 和 Kubernetes Dashboard 都是优秀的集群操作工具，核心侧重在资源查看与控制。Kite 具备这些 Dashboard 能力，但定位是面向团队协作的运维平台：
+## Kite 适合什么场景
 
-- 在同一个工作空间整合可观测性、多集群运维、治理能力与 AI 助手
-- 内置团队治理能力：OAuth、MFA、Passkey、RBAC、用户角色映射与审计日志
-- 不止资源视图，还覆盖运维工作流：Web 终端、内置 kubectl 控制台、Kube Proxy
-- 让运维、开发和管理员在同一套系统中协作，而不是拼接多个工具
+Headlamp 和 Kubernetes Dashboard 都是优秀的单集群资源查看与操作工具。Kite 在此基础上增加了共享的多集群工作空间、团队治理、可观测性和 AI 辅助工作流。
 
-一句话：它们更像 Dashboard 工具，Kite 更像 Kubernetes 日常运维与协作平台。
-
-## 开始使用
-
-准备好探索 Kite 了吗？查看[安装指南](./installation)。
+如果你正在评估 Kite，请继续阅读[安装指南](./installation)。

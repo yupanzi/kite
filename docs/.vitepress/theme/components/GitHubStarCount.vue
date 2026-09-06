@@ -1,6 +1,13 @@
 <script setup>
 import { onMounted, ref } from "vue";
 
+defineProps({
+  ariaLabel: {
+    type: String,
+    default: "View Kite stars on GitHub",
+  },
+});
+
 const starCount = ref(3_100);
 
 onMounted(async () => {
@@ -24,7 +31,7 @@ onMounted(async () => {
     href="https://github.com/kite-org/kite/stargazers"
     target="_blank"
     rel="noreferrer"
-    aria-label="View Kite stars on GitHub"
+    :aria-label="ariaLabel"
   >
     <span aria-hidden="true">★</span>
     {{ starCount.toLocaleString("en-US") }}

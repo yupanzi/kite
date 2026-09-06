@@ -1,156 +1,128 @@
-# Kite - Modern Kubernetes Dashboard
-
 <div align="center">
 
-<img src="./docs/assets/logo.svg" alt="Kite Logo" width="128" height="128">
+<img src="./docs/assets/logo.svg" alt="Kite logo" width="128" height="128">
 
-_A modern Kubernetes dashboard_
+# Kite
 
-<a href="https://trendshift.io/repositories/21820" target="_blank"><img src="https://trendshift.io/api/badge/repositories/21820" alt="kite-org%2Fkite | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+**All your clusters. One workspace.**
 
-<a href="https://github.com/kite-org/kite/stargazers"><img src="https://img.shields.io/github/stars/kite-org/kite?color=ffcb47&labelColor=black&style=flat-square&logo=github&label=Stars" /></a>
-<a href="https://github.com/kite-org/kite/releases"><img src="https://img.shields.io/github/downloads/kite-org/kite/total?color=369eff&labelColor=black&logo=github&style=flat-square&label=Downloads" /></a>
-<a href="https://github.com/kite-org/kite/graphs/contributors"><img src="https://img.shields.io/github/contributors/kite-org/kite?style=flat-square&logo=github&label=Contributors&labelColor=black" /></a>
-[![License](https://img.shields.io/badge/License-Apache-green.svg)](LICENSE)
-<a href="https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg"><img alt="Join Kite" src="https://badgen.net/badge/Slack/Join%20Kite/0abd59?icon=slack" /></a>
+Kite is a lightweight, open-source Kubernetes workspace for multi-cluster operations, observability, access control, and AI-assisted troubleshooting.
 
+[![Release](https://img.shields.io/github/v/release/kite-org/kite?style=flat-square&logo=github&label=Release)](https://github.com/kite-org/kite/releases)
+[![Stars](https://img.shields.io/github/stars/kite-org/kite?style=flat-square&logo=github&label=Stars)](https://github.com/kite-org/kite/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/kite-org/kite/total?style=flat-square&logo=github&label=Downloads)](https://github.com/kite-org/kite/releases)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square)](LICENSE)
 
-[**Live Demo**](https://kite-demo.zzde.me) | [**Documentation**](https://kite.zzde.me)
-<br>
-**English** | [中文](./README_zh.md)
+[**Documentation**](https://kite.zzde.me) · [**Releases**](https://github.com/kite-org/kite/releases) · [**Community**](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg)
+
+**English** · [中文](./README_zh.md)
 
 </div>
 
-Kite is a lightweight, modern Kubernetes dashboard that unifies real-time observability, multi-cluster and resource management, enterprise-grade user governance (OAuth, MFA, passkeys, RBAC, and audit logs), and AI agents in one workspace. Not just a tool, but more like a platform.
-
 <img width="1586" height="1167" alt="image" src="https://github.com/user-attachments/assets/5710204d-5d34-44af-85dc-3b436e205c12" />
 
-## ✨ Features
+## Why Kite
 
-### User Interface
+### Observe
 
-- Dark/light/color themes with system preference detection
-- Global search across all resources
-- Responsive design for desktop, tablet, and mobile
-- i18n support (English and Chinese)
+- Monitor CPU, memory, and network usage with per-cluster Prometheus integrations.
+- Stream and filter pod logs, then inspect events, conditions, and related resources in context.
 
-### Multi-Cluster Management
+### Operate
 
-- Switch between multiple Kubernetes clusters
-- Independent Prometheus configuration per cluster
-- Automatic discovery from kubeconfig
-- Fine-grained cluster access permissions
+- Manage core Kubernetes resources, CRDs, and Helm releases across multiple clusters.
+- Edit live YAML, scale or restart workloads, and use browser-based pod, node, and kubectl terminals.
+- Find resources with global search and access pods or services through the built-in Kube Proxy.
 
-### Resource Management
+### Govern
 
-- Full coverage: Pods, Deployments, Services, ConfigMaps, Secrets, PVs, PVCs, Nodes, and more
-- Live YAML editing with Monaco editor (syntax highlighting and validation)
-- Detailed views with containers, volumes, events, and conditions
-- Resource relationships (e.g., Deployment → Pods)
-- Create, update, delete, scale, and restart operations
-- Custom Resource Definitions (CRDs) support
-- Quick image tag selector using Docker and container registry APIs
-- Helm chart discovery, install, upgrade, rollback, and release management
-- Customizable sidebar with CRD shortcuts
-- Kube proxy for direct pod/service access (no more `kubectl port-forward`)
+- Support OAuth, LDAP, local accounts, MFA, and passkey login.
+- Control access with RBAC and per-cluster permissions, backed by audit logs for resource changes.
 
-### Monitoring & Observability
+### Work with AI
 
-- Real-time CPU, memory, and network charts (Prometheus)
-- Live pod logs with filtering and search
-- Web terminal for pods and nodes
-- Built-in kubectl console.
-- AI assistant.
+- Inspect resources, logs, and Prometheus metrics with the built-in AI assistant.
+- Review and confirm write operations before execution; the assistant respects the current user's RBAC permissions.
 
-### Security
+## Quick Start
 
-- OAuth integration
-- MFA for password users
-- Passkey login
-- Role-based access control
-- User management and role allocation
+### Helm
 
----
+For a quick evaluation, install Kite from the OCI registry into a dedicated namespace:
 
-## 🚀 Quick Start
+```bash
+helm install kite oci://ghcr.io/kite-org/charts/kite \
+  --namespace kite-system \
+  --create-namespace
+```
 
-For detailed instructions, please refer to the [documentation](https://kite.zzde.me/guide/installation.html).
+Forward the service to your local machine:
+
+```bash
+kubectl port-forward --namespace kite-system svc/kite 8080:8080
+```
+
+Open [http://localhost:8080](http://localhost:8080), create the first administrator, and follow the setup flow to connect a cluster. When Kite runs inside the cluster it manages, choose the `in-cluster` connection type for the simplest setup.
+
+> [!IMPORTANT]
+> The default chart values are intended for evaluation. Before using Kite in production, enable persistent storage or configure an external database, replace the default encryption key, and review the chart's cluster-wide RBAC permissions. See the [installation guide](https://kite.zzde.me/guide/installation) and [chart values](https://kite.zzde.me/config/chart-values).
+
+## Other Installation Options
 
 ### Docker
 
 ```bash
-docker run -d -p 8080:8080 -v ./data:/data -e DB_DSN=/data/db.sqlite ghcr.io/kite-org/kite:latest
+mkdir -p data
+docker run -d --name kite \
+  -p 8080:8080 \
+  -v "$(pwd)/data:/data" \
+  -e DB_DSN=/data/db.sqlite \
+  ghcr.io/kite-org/kite:latest
 ```
 
-### Deploy in Kubernetes
+### Kubernetes Manifest
 
-#### Using Helm (Recommended)
+The standalone manifest is intended for evaluation and stores application data inside the container unless you add persistent storage.
 
-1. **Install from OCI registry**
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/main/deploy/install.yaml
+kubectl port-forward --namespace kube-system svc/kite 8080:8080
+```
 
-   ```bash
-   helm install kite oci://ghcr.io/kite-org/charts/kite -n kube-system
-   ```
-
-2. **Or install from Helm repository**
-
-   ```bash
-   helm repo add kite https://kite-org.github.io/kite/
-   helm repo update
-   helm install kite kite/kite -n kube-system
-   ```
-
-#### Using kubectl
-
-1. **Apply deployment manifests**
-
-   ```bash
-   kubectl apply -f deploy/install.yaml
-   # or install it online
-   # Note: This method may not be suitable for a production environment, as it does not include any configuration related to persistence. You will need to manually mount the persistence volume and set the environment variable DB_DSN=/data/db.sqlite to ensure that data is not lost. Alternatively, an external database can be used.
-   # ref: https://kite.zzde.me/faq.html#persistence-issues
-   kubectl apply -f https://raw.githubusercontent.com/kite-org/kite/refs/heads/main/deploy/install.yaml
-   ```
-
-2. **Access via port-forward**
-
-   ```bash
-   kubectl port-forward -n kube-system svc/kite 8080:8080
-   ```
+The manifest grants its service account `cluster-admin`. Review and restrict these permissions before using it outside a test environment.
 
 ### Build from Source
 
-1. **Clone the repository**
+Building Kite requires Go 1.26, Node.js `^20.19.0` or `>=22.12.0`, pnpm, and Make.
 
-   ```bash
-   git clone https://github.com/kite-org/kite.git
-   cd kite
-   ```
+```bash
+git clone https://github.com/kite-org/kite.git
+cd kite
+make deps
+make build
+./kite
+```
 
-2. **Build the project**
+## Documentation
 
-   ```bash
-   make deps
-   make build
-   ```
+| Topic | Guide |
+| --- | --- |
+| Installation and exposure | [Installation](https://kite.zzde.me/guide/installation) |
+| Users, authentication, and permissions | [User management](https://kite.zzde.me/config/user-management) · [RBAC](https://kite.zzde.me/config/rbac-config) |
+| Monitoring | [Prometheus setup](https://kite.zzde.me/config/prometheus-setup) |
+| Operations | [Helm management](https://kite.zzde.me/guide/helm-management) · [Kite Cluster Agent](https://kite.zzde.me/guide/kite-cluster-agent) |
+| AI | [AI assistant](https://kite.zzde.me/guide/ai-assistant) |
+| API | [API documentation](https://kite.zzde.me/api/authentication) |
 
-3. **Run the server**
+## Community
 
-   ```bash
-   make run
-   ```
+- Read the [contributing guidelines](./CONTRIBUTING.md) before opening a pull request.
+- Report vulnerabilities according to the [security policy](./SECURITY.md).
+- Ask questions and meet other users in the [Kite Slack community](https://join.slack.com/t/kite-dashboard/shared_invite/zt-3cl9mccs7-eQZ1_t6IoTPHZkxXED1ceg).
 
----
+## Support This Project
 
-## 🔍 Troubleshooting
-
-For troubleshooting, please refer to the [documentation](https://kite.zzde.me).
-
-## 💖 Support This Project
-
-If you find Kite helpful, please consider supporting its development! Your donations help maintain and improve this project.
-
-### Donation Methods
+If you find Kite helpful, please consider supporting its development. Your donations help maintain and improve the project.
 
 <table>
   <tr>
@@ -173,10 +145,6 @@ If you find Kite helpful, please consider supporting its development! Your donat
 
 Thank you for your support! ❤️
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please see our [contributing guidelines](./CONTRIBUTING.md) for details on how to get involved.
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+Kite is licensed under the [Apache License 2.0](LICENSE).
