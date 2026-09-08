@@ -109,7 +109,12 @@ export function PodDetail(props: { namespace: string; name: string }) {
   const handleDebugCreated = (updatedPod: Pod, containerName: string) => {
     const updatedNamespace = updatedPod.metadata!.namespace!
     const updatedName = updatedPod.metadata!.name!
-    const queryKey = getResourceQueryKey('pods', updatedNamespace, updatedName)
+    const queryKey = getResourceQueryKey(
+      'pods',
+      updatedNamespace,
+      updatedName,
+      currentCluster
+    )
     queryClient.setQueryData(queryKey, updatedPod)
     setIsDebugDialogOpen(false)
     const nextParams = new URLSearchParams(searchParams)

@@ -1314,6 +1314,7 @@
     },
     "fields": {
       "repository": "Repository",
+      "plainHTTP": "使用 HTTP（不加密）",
       "deprecated": "已废弃",
       "sources": "源码",
       "keywords": "关键词",
@@ -1329,6 +1330,7 @@
     },
     "messages": {
       "addRepositoryDescription": "添加 Helm Repository 后，它的 Charts 会显示在列表中。支持传统仓库（https://）和 OCI 仓库（oci://，URL 需指向单个 Chart）。",
+      "plainHTTPHint": "此 OCI Registry 将使用 HTTP 而非 HTTPS，凭据和 Chart 数据将以明文传输。",
       "repositoryAdded": "Repository 已添加",
       "repositoryDeleted": "Repository 已删除",
       "deleteRepositoryDescription": "这里只会从 Kite 移除这个受管理的 Chart 来源，不会删除远端 Chart，也不会卸载已安装的 Helm Release。",

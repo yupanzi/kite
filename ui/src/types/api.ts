@@ -174,6 +174,7 @@ export interface HelmRepository {
   id: number
   name: string
   url: string
+  plainHTTP: boolean
   username?: string
   hasAuth: boolean
   createdAt: string

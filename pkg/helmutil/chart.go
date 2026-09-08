@@ -23,8 +23,13 @@ const archiveCacheTTL = 10 * time.Minute
 
 var (
 	archiveCacheMu sync.Mutex
-	archiveCache   = map[string]cachedArchive{}
+	archiveCache   = map[RepositoryCacheKey]cachedArchive{}
 )
+
+type RepositoryCacheKey struct {
+	URL       string
+	PlainHTTP bool
+}
 
 type cachedArchive struct {
 	data      []byte
@@ -70,7 +75,7 @@ func LoadArchive(chartURL string, repository *model.HelmRepository) (*chart.Char
 		chartURL = chartURL + ":" + tag
 	}
 
-	cacheKey := archiveCacheKey(chartURL)
+	cacheKey := archiveCacheKey(chartURL, repository)
 	now := time.Now()
 	archiveCacheMu.Lock()
 	cached, ok := archiveCache[cacheKey]
@@ -148,12 +153,30 @@ func newAnonymousAuthorizer() auth.Client {
 
 func newRegistryClient(repository *model.HelmRepository, targetURL string) (*registry.Client, error) {
 	options := []registry.ClientOption{registry.ClientOptHTTPClient(registryHTTPClient)}
+	if repositoryUsesPlainHTTP(repository, targetURL) {
+		options = append(options, registry.ClientOptPlainHTTP())
+	}
 	if repositoryCredentialsApply(repository, targetURL) {
 		options = append(options, registry.ClientOptBasicAuth(repository.Username, string(repository.Password)))
 	} else {
 		options = append(options, registry.ClientOptAuthorizer(anonymousAuthorizer))
 	}
 	return registry.NewClient(options...)
+}
+
+func repositoryUsesPlainHTTP(repository *model.HelmRepository, targetURL string) bool {
+	if repository == nil || !repository.PlainHTTP || !registry.IsOCI(repository.URL) || !registry.IsOCI(targetURL) {
+		return false
+	}
+	base, err := url.Parse(repository.URL)
+	if err != nil {
+		return false
+	}
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(base.Host, target.Host)
 }
 
 func repositoryCredentialsApply(repository *model.HelmRepository, targetURL string) bool {
@@ -204,26 +227,30 @@ func sameURLHost(baseURL, targetURL string) bool {
 	return strings.EqualFold(base.Hostname(), target.Hostname())
 }
 
-func archiveCacheKey(chartURL string) string {
-	return chartURL
+func archiveCacheKey(chartURL string, repository *model.HelmRepository) RepositoryCacheKey {
+	return RepositoryCacheKey{URL: chartURL, PlainHTTP: repositoryUsesPlainHTTP(repository, chartURL)}
 }
 
 // MatchesRepositoryCacheKey matches paths and OCI tag references under a repository URL.
-func MatchesRepositoryCacheKey(repositoryURL, key string) bool {
-	if key == repositoryURL {
+func MatchesRepositoryCacheKey(repositoryKey, key RepositoryCacheKey) bool {
+	if repositoryKey.PlainHTTP != key.PlainHTTP {
+		return false
+	}
+	if key.URL == repositoryKey.URL {
 		return true
 	}
-	trimmed := strings.TrimRight(repositoryURL, "/")
-	if strings.HasPrefix(key, trimmed+"/") {
+	trimmed := strings.TrimRight(repositoryKey.URL, "/")
+	if strings.HasPrefix(key.URL, trimmed+"/") {
 		return true
 	}
-	return registry.IsOCI(repositoryURL) && strings.HasPrefix(key, trimmed+":")
+	return registry.IsOCI(repositoryKey.URL) && strings.HasPrefix(key.URL, trimmed+":")
 }
 
 func ClearRepositoryArchiveCache(repository model.HelmRepository) {
+	repositoryKey := archiveCacheKey(repository.URL, &repository)
 	archiveCacheMu.Lock()
 	for key := range archiveCache {
-		if MatchesRepositoryCacheKey(repository.URL, key) {
+		if MatchesRepositoryCacheKey(repositoryKey, key) {
 			delete(archiveCache, key)
 		}
 	}

@@ -102,8 +102,6 @@ ${colorConfig
   )
 }
 
-const ChartTooltip = RechartsPrimitive.Tooltip
-
 type ChartTooltipContentProps = React.ComponentProps<'div'> &
   Pick<
     React.ComponentProps<typeof RechartsPrimitive.Tooltip>,
@@ -259,8 +257,6 @@ function ChartTooltipContent({
   )
 }
 
-const ChartLegend = RechartsPrimitive.Legend
-
 type ChartLegendContentProps = React.ComponentProps<'div'> & {
   payload?: ReadonlyArray<RechartsPrimitive.LegendPayload>
   verticalAlign?: 'top' | 'bottom' | 'middle'
@@ -361,9 +357,8 @@ function getPayloadConfigFromPayload(
 
 export {
   ChartContainer,
-  ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
   ChartLegendContent,
   ChartStyle,
 }
+export { Tooltip as ChartTooltip, Legend as ChartLegend } from 'recharts'

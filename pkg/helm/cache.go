@@ -104,12 +104,15 @@ func (h *HelmChartHandler) loadChartContent(repository model.HelmRepository, ent
 	return content, nil
 }
 
-func repositoryIndexCacheKey(repository model.HelmRepository) string {
-	return repository.URL
+func repositoryIndexCacheKey(repository model.HelmRepository) helmutil.RepositoryCacheKey {
+	return helmutil.RepositoryCacheKey{URL: repository.URL, PlainHTTP: repository.PlainHTTP}
 }
 
-func chartContentCacheKey(repository model.HelmRepository, entry *repo.ChartVersion) string {
-	return helmutil.ResolveURL(repository.URL, entry.URLs[0])
+func chartContentCacheKey(repository model.HelmRepository, entry *repo.ChartVersion) helmutil.RepositoryCacheKey {
+	return helmutil.RepositoryCacheKey{
+		URL:       helmutil.ResolveURL(repository.URL, entry.URLs[0]),
+		PlainHTTP: repository.PlainHTTP,
+	}
 }
 
 func (h *HelmChartHandler) clearRepositoryCache(repository model.HelmRepository) {

@@ -1227,6 +1227,7 @@
     },
     "fields": {
       "repository": "Repository",
+      "plainHTTP": "Use HTTP (unencrypted)",
       "deprecated": "Deprecated",
       "sources": "Sources",
       "keywords": "Keywords",
@@ -1242,6 +1243,7 @@
     },
     "messages": {
       "addRepositoryDescription": "Add a Helm repository to make its charts available. Supports classic (https://) and OCI (oci://) repositories; an OCI URL must point at a single chart.",
+      "plainHTTPHint": "Use HTTP instead of HTTPS for this OCI registry. Credentials and chart data are sent without encryption.",
       "repositoryAdded": "Repository added",
       "repositoryDeleted": "Repository deleted",
       "deleteRepositoryDescription": "This only removes the managed chart source from Kite. It does not delete remote charts or installed Helm releases.",

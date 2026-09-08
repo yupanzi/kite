@@ -104,6 +104,7 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			return
 		}
 
+		appliedYAML, _ := syaml.Marshal(obj)
 		existingObj := &unstructured.Unstructured{}
 		existingObj.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 		existingObj.SetName(obj.GetName())
@@ -161,7 +162,7 @@ func (h *ResourceApplyHandler) ApplyResource(c *gin.Context) {
 			ResourceName:  obj.GetName(),
 			Namespace:     obj.GetNamespace(),
 			OperationType: "apply",
-			ResourceYAML:  docYAML,
+			ResourceYAML:  string(appliedYAML),
 			PreviousYAML:  string(previousYAML),
 			OperatorID:    user.ID,
 			Success:       err == nil,

@@ -21,6 +21,8 @@ Kite only displays chart information and is not responsible for the chart conten
 
 Users with the **admin** role can add or remove Helm repositories. Both classic (`https://`) and OCI (`oci://`) repositories are supported; an OCI URL must point at a single chart path without a tag or digest (for example `oci://registry.example.com/charts/app`), and its semver registry tags become the chart's versions. Removing a repository only removes it from Kite and does not uninstall existing releases.
 
+OCI registries use HTTPS by default. For an HTTP-only registry, enable **Use HTTP (unencrypted)** when adding the repository; keep the URL in `oci://` form. Kite saves this setting for browsing, installation, upgrades, and automatic upgrades. When enabled, credentials and chart data are sent without encryption.
+
 Open a chart to view its README, values, templates, and versions. If the chart package is available, you can install it directly from Kite.
 
 ## Helm Releases

@@ -8,16 +8,18 @@ import (
 )
 
 type createHelmRepositoryRequest struct {
-	Name     string `json:"name" binding:"required"`
-	URL      string `json:"url" binding:"required"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Name      string `json:"name" binding:"required"`
+	URL       string `json:"url" binding:"required"`
+	PlainHTTP bool   `json:"plainHTTP"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
 }
 
 type helmRepositoryResponse struct {
 	ID        uint      `json:"id"`
 	Name      string    `json:"name"`
 	URL       string    `json:"url"`
+	PlainHTTP bool      `json:"plainHTTP"`
 	Username  string    `json:"username,omitempty"`
 	HasAuth   bool      `json:"hasAuth"`
 	CreatedAt time.Time `json:"createdAt"`

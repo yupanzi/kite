@@ -176,20 +176,29 @@ function AddRepositoryDialog({
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [url, setURL] = useState('')
+  const [plainHTTP, setPlainHTTP] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isOCIRepository = url.trim().toLowerCase().startsWith('oci://')
 
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
     setIsSubmitting(true)
     try {
-      await createHelmRepository({ name, url, username, password })
+      await createHelmRepository({
+        name,
+        url,
+        plainHTTP: isOCIRepository && plainHTTP,
+        username,
+        password,
+      })
       toast.success(t('helmCharts.messages.repositoryAdded'))
       setName('')
       setURL('')
+      setPlainHTTP(false)
       setUsername('')
       setPassword('')
       onOpenChange(false)
@@ -229,12 +238,41 @@ function AddRepositoryDialog({
               <Input
                 id="helm-repository-url"
                 type="url"
+                style={{ fontFeatureSettings: '"liga" 0, "calt" 0' }}
                 value={url}
-                onChange={(event) => setURL(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setURL(value)
+                  if (!value.trim().toLowerCase().startsWith('oci://')) {
+                    setPlainHTTP(false)
+                  }
+                }}
                 placeholder={t('helmCharts.placeholders.repositoryUrl')}
                 required
               />
             </div>
+            {isOCIRepository && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="helm-repository-plain-http"
+                    checked={plainHTTP}
+                    onCheckedChange={setPlainHTTP}
+                    disabled={isSubmitting}
+                    aria-describedby="helm-repository-plain-http-hint"
+                  />
+                  <Label htmlFor="helm-repository-plain-http">
+                    {t('helmCharts.fields.plainHTTP')}
+                  </Label>
+                </div>
+                <p
+                  id="helm-repository-plain-http-hint"
+                  className="text-sm text-muted-foreground"
+                >
+                  {t('helmCharts.messages.plainHTTPHint')}
+                </p>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="helm-repository-username">

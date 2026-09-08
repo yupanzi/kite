@@ -4,19 +4,20 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/helmutil"
 )
 
 type HelmChartHandler struct {
 	indexCacheMu   sync.Mutex
-	indexCache     map[string]cachedRepositoryIndex
+	indexCache     map[helmutil.RepositoryCacheKey]cachedRepositoryIndex
 	contentCacheMu sync.Mutex
-	contentCache   map[string]cachedChartContent
+	contentCache   map[helmutil.RepositoryCacheKey]cachedChartContent
 }
 
 func NewHelmChartHandler() *HelmChartHandler {
 	return &HelmChartHandler{
-		indexCache:   map[string]cachedRepositoryIndex{},
-		contentCache: map[string]cachedChartContent{},
+		indexCache:   map[helmutil.RepositoryCacheKey]cachedRepositoryIndex{},
+		contentCache: map[helmutil.RepositoryCacheKey]cachedChartContent{},
 	}
 }
 

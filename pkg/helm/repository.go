@@ -45,10 +45,11 @@ func (h *HelmChartHandler) CreateRepository(c *gin.Context) {
 	}
 
 	repository := model.HelmRepository{
-		Name:     strings.TrimSpace(req.Name),
-		URL:      strings.TrimSpace(req.URL),
-		Username: strings.TrimSpace(req.Username),
-		Password: model.SecretString(req.Password),
+		Name:      strings.TrimSpace(req.Name),
+		URL:       strings.TrimSpace(req.URL),
+		PlainHTTP: req.PlainHTTP,
+		Username:  strings.TrimSpace(req.Username),
+		Password:  model.SecretString(req.Password),
 	}
 
 	if repository.Name == "" || repository.URL == "" {
@@ -75,6 +76,10 @@ func (h *HelmChartHandler) CreateRepository(c *gin.Context) {
 		return
 	}
 	repository.URL = scheme + repository.URL[len(scheme):]
+	if repository.PlainHTTP && scheme != registry.OCIScheme {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plainHTTP is only supported for OCI repositories"})
+		return
+	}
 	if scheme == registry.OCIScheme {
 		repository.URL = strings.TrimRight(repository.URL, "/")
 		if err := validateOCIRepositoryURL(repositoryURL); err != nil {
@@ -133,6 +138,7 @@ func toHelmRepositoryResponse(repository model.HelmRepository) helmRepositoryRes
 		ID:        repository.ID,
 		Name:      repository.Name,
 		URL:       repository.URL,
+		PlainHTTP: repository.PlainHTTP,
 		Username:  repository.Username,
 		HasAuth:   repository.Username != "",
 		CreatedAt: repository.CreatedAt,

@@ -21,6 +21,8 @@ Kite 只是展示 Chart 信息，不对其中的内容负责。安装或升级�
 
 拥有 **admin** 角色的用户可以添加或删除 Helm Repository。支持传统仓库（`https://`）和 OCI 仓库（`oci://`）；OCI URL 需指向单个 Chart 路径，且不能带 tag 或 digest（例如 `oci://registry.example.com/charts/app`），其 semver 格式的 registry tag 会作为该 Chart 的版本列表。删除 Repository 只会从 Kite 移除这个来源，不会卸载已有 Release。
 
+OCI Registry 默认使用 HTTPS。如果 Registry 仅提供 HTTP，请在添加仓库时开启 **使用 HTTP（不加密）**，URL 仍使用 `oci://` 格式。Kite 会保存此设置，并用于浏览、安装、升级和自动升级。开启后，凭据和 Chart 数据将以明文传输。
+
 进入 Chart 详情后，可以查看 README、values、templates 和版本。如果 Chart package 可用，可以直接从 Kite 安装。
 
 ## Helm Releases
