@@ -36,7 +36,7 @@ debug: false
 # External Host for the application
 # Used in generate OAuth redirect URLs
 # Leave empty to obtain from request headers
-# Example: https://kite.zzde.me
+# Example: https://kitehq.dev
 host: ""
 
 # Base path for the application
@@ -264,13 +264,13 @@ ingress:
   #     nginx.ingress.kubernetes.io/proxy-buffering: "off"
   annotations: {}
   hosts:
-    - host: kite.zzde.me
+    - host: kitehq.dev
       paths:
         - path: /
           pathType: ImplementationSpecific
   # tls:
   #  - hosts:
-  #      - kite.zzde.me
+  #      - kitehq.dev
 
 # Gateway API resources for exposing Kite
 # Requires Gateway API CRDs to be installed in the cluster
