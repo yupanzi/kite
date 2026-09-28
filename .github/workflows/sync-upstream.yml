@@ -13,10 +13,10 @@
 #
 # On a text conflict OR a failed build the merge is discarded, master is left
 # untouched, and a main -> master pull request is opened for manual resolution.
-# The PR is idempotent: the job fails once when it opens the PR, then stays
-# quiet while it is open, instead of mailing an identical failure every day.
-# Resolve it locally with scripts/sync-upstream.sh (or `git merge` on master)
-# and push; GitHub closes the PR once master contains main.
+# The PR is opened once and reused, but the job keeps failing every day it
+# stays open, so the block stays visible in the Actions list. Resolve it
+# locally with scripts/sync-upstream.sh (or `git merge` on master) and push;
+# GitHub closes the PR once master contains main.
 #
 # REQUIRES the SYNC_TOKEN repository secret: a PAT with push access AND workflow
 # rights (classic PAT: repo + workflow scopes; fine-grained PAT: Contents and
