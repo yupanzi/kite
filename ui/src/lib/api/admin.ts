@@ -372,6 +372,7 @@ export interface GeneralSetting {
   kubectlImage: string
   nodeTerminalImage: string
   clusterAgentImage: string
+  pluginCatalogUrl: string
   enableAnalytics: boolean
   enableVersionCheck: boolean
   passwordLoginDisabled: boolean
@@ -392,6 +393,7 @@ export interface GeneralSettingUpdateRequest {
   kubectlImage?: string
   nodeTerminalImage?: string
   clusterAgentImage?: string
+  pluginCatalogUrl?: string
   enableAnalytics?: boolean
   enableVersionCheck?: boolean
   passwordLoginDisabled?: boolean

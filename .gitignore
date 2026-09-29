@@ -56,3 +56,4 @@ kite
 # Local-only dev scaffolding (see .local/README.md) — never committed
 .local/
 
+/data/plugins/

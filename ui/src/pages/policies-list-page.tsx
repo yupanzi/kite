@@ -188,8 +188,7 @@ export function PoliciesListPage() {
     pagination,
     setPagination,
   } = useResourceTableState({
-    resourceName: 'policies',
-    clusterScope: true,
+    storageKey: 'policies',
     defaultHiddenColumns: [],
   })
 
