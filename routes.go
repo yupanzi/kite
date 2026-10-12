@@ -192,6 +192,7 @@ func registerClusterProtectedRoutes(api *gin.RouterGroup, helmChartsHandler *hel
 
 	resourceApplyHandler := resources.NewResourceApplyHandler()
 	api.POST("/resources/apply", resourceApplyHandler.ApplyResource)
+	api.GET("/resources/resolve", resources.ResolveResource)
 
 	api.GET("/image/tags", images.GetImageTags)
 	api.GET("/templates", templates.ListTemplates)

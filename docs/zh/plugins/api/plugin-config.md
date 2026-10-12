@@ -413,7 +413,7 @@ export default function Settings() {
 
 ## 国际化
 
-`i18n` 可选，用于配置插件的中英文翻译。将 `createPluginI18n()` 返回的 `resources` 命名为 `translations`，再传入配置：
+`i18n` 可选。使用时需提供英文翻译，其他语言可以不完整或省略，缺失的文案回退到英文。将 `createPluginI18n()` 返回的 `resources` 命名为 `translations`，再传入配置：
 
 ```tsx
 import { definePlugin } from '@kite-dev/plugin-sdk'

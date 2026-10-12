@@ -47,6 +47,8 @@ my-plugin/
 
 Set the plugin's name, display name, and version in `package.json`. See [Plugin Identity](./api/plugin-identity) for the fields.
 
+The generated plugin includes English and Chinese translations. English is the base language; other languages can be incomplete or removed, with missing text falling back to English. See [Internationalization](./i18n).
+
 ## Write Pages and Menus
 
 Edit `plugin.config.tsx` to declare routes and menus:

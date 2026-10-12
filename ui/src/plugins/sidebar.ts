@@ -21,11 +21,15 @@ const coreMenuGroups = Object.fromEntries(
 )
 
 export function pluginLabel(label: LocalizedLabel, language: string) {
-  return typeof label === 'string'
-    ? label
-    : language.startsWith('zh')
-      ? label.zh
-      : label.en
+  if (typeof label === 'string') return label
+  const translations: Record<string, string | undefined> = label
+  const parts = language.split('-')
+  while (parts.length > 0) {
+    const text = translations[parts.join('-')]
+    if (text !== undefined) return text
+    parts.pop()
+  }
+  return label.en
 }
 
 export function mergePluginMenus(

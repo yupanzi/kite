@@ -413,7 +413,7 @@ Settings are shared across the Kite instance: an administrator configures them o
 
 ## Internationalization
 
-The optional `i18n` field configures the plugin's English and Chinese translations. Name the `resources` returned by `createPluginI18n()` as `translations` and pass them into the configuration:
+The optional `i18n` field requires English translations. Other languages can be incomplete or omitted; missing text falls back to English. Name the `resources` returned by `createPluginI18n()` as `translations` and pass them into the configuration:
 
 ```tsx
 import { definePlugin } from '@kite-dev/plugin-sdk'

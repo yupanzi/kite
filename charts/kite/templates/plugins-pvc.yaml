@@ -1,4 +1,6 @@
-{{- if and .Values.plugins.persistence.enabled (not .Values.plugins.persistence.existingClaim) }}
+{{- $plugins := .Values.plugins | default dict }}
+{{- $persistence := $plugins.persistence | default dict }}
+{{- if and $persistence.enabled (not $persistence.existingClaim) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -8,11 +10,11 @@ metadata:
     {{- include "kite.labels" . | nindent 4 }}
 spec:
   accessModes:
-    {{- toYaml .Values.plugins.persistence.accessModes | nindent 4 }}
+    {{- toYaml ($persistence.accessModes | default (list "ReadWriteOnce")) | nindent 4 }}
   resources:
     requests:
-      storage: {{ .Values.plugins.persistence.size }}
-  {{- if .Values.plugins.persistence.storageClass }}
-  storageClassName: {{ .Values.plugins.persistence.storageClass | quote }}
+      storage: {{ $persistence.size | default "1Gi" }}
+  {{- if $persistence.storageClass }}
+  storageClassName: {{ $persistence.storageClass | quote }}
   {{- end }}
 {{- end }}
