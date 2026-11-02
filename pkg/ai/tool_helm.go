@@ -345,6 +345,12 @@ func executeUpdateHelmReleaseValues(ctx context.Context, cs *cluster.ClientSet, 
 	if current.Chart == nil {
 		return fmt.Sprintf("Error: Helm release %s/%s has no chart recorded", namespace, name), true
 	}
+	// The release stores its chart without subchart contents (upstream #768),
+	// so re-rendering a chart with dependencies drops their resources and Helm
+	// deletes them.
+	if current.Chart.Metadata != nil && len(current.Chart.Metadata.Dependencies) > 0 {
+		return fmt.Sprintf("Error: Helm release %s/%s uses a chart with dependencies, which the stored release chart does not include; updating its values here would delete the dependencies' resources. Upgrade it from the Helm release page with a chart package instead", namespace, name), true
+	}
 
 	rel, err := helmutil.UpgradeRelease(ctx, cfg, name, current.Chart, values, helmutil.UpgradeReleaseOptions{
 		Namespace:   namespace,
