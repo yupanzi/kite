@@ -345,7 +345,7 @@ func executeUpdateHelmReleaseValues(ctx context.Context, cs *cluster.ClientSet, 
 	if current.Chart == nil {
 		return fmt.Sprintf("Error: Helm release %s/%s has no chart recorded", namespace, name), true
 	}
-	// The release stores its chart without subchart contents (upstream #768),
+	// The release stores its chart without subchart contents (kite-org/kite#768),
 	// so re-rendering a chart with dependencies drops their resources and Helm
 	// deletes them.
 	if current.Chart.Metadata != nil && len(current.Chart.Metadata.Dependencies) > 0 {
