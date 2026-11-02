@@ -406,6 +406,7 @@ export function GeneralManagement() {
                     )}
                   </Label>
                   <Select
+                    disabled={isAIManaged}
                     value={formData.aiEffort}
                     onValueChange={(value: AIEffort) =>
                       setFormData((prev) => ({ ...prev, aiEffort: value }))

@@ -70,7 +70,8 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		return
 	}
 	if common.IsSectionManaged("ai") && (req.AIAgentEnabled != nil || req.AIProvider != nil ||
-		req.AIModel != nil || req.AIAPIKey != nil || req.AIBaseURL != nil || req.AIMaxTokens != nil) {
+		req.AIModel != nil || req.AIAPIKey != nil || req.AIBaseURL != nil || req.AIMaxTokens != nil ||
+		req.AIEffort != nil) {
 		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
 		return
 	}

@@ -212,6 +212,7 @@ config:
   #   apiKey: "${AI_API_KEY}" # Inject from a Secret using extraEnvs
   #   baseUrl: "https://api.openai.com/v1"
   #   maxTokens: 16384
+  #   effort: xhigh # Anthropic only: low, medium, high, xhigh, max
   #
   # RBAC configuration (roles and role mappings)
   # rbac:

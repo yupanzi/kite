@@ -67,6 +67,13 @@ control model behaviour and they are not interchangeable:
   one: `budget_tokens` is removed on current models and returns 400. Levels are
   `low`/`medium`/`high`/`xhigh`/`max`, default `xhigh`. Anthropic path only.
 
+Both can be managed by the config file's `ai` section (upstream #758). A
+managed section is enforced in three places — `applyAI` in `internal/config.go`,
+the `IsSectionManaged("ai")` check in `pkg/settings/handler.go`, and
+`isAIManaged` in `general-management.tsx` — and upstream only lists its own
+fields there. A fork-only AI setting must be added to all three, or it stays
+editable while the page says the section is read-only.
+
 `anthropicModelSupportsModernFeatures` gates effort, adaptive thinking, and
 context management behind a deny list of model-name substrings. That list tracks
 *request-surface support*, not lifecycle — Opus 4.5, Sonnet 4.5, and Haiku 4.5
