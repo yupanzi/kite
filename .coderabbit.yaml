@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+
+reviews:
+  profile: chill
+  poem: false
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+  path_filters:
+    - "!static/**"
+    - "!bin/**"
+    - "!kite"
+    - "!go.sum"
+    - "!ui/pnpm-lock.yaml"
+    - "!e2e/pnpm-lock.yaml"
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Report only actionable problems introduced by this PR and supported by
+        code evidence. Explain the trigger, user impact, and smallest useful fix.
+        Verify claims against the implementation and relevant callers.
+        Prioritize correctness, cluster and namespace isolation, RBAC, AI tool
+        authorization, and secret handling. Apply the project rules in AGENTS.md.
+        Keep each PR focused on one clearly stated problem. Flag unrelated
+        features, refactors, cleanup, or test expansion that broadens the scope
+        or obscures the goal. Allow supporting changes needed to solve that same
+        problem across multiple files or layers.
+        Keep tests proportional to the change and focused on meaningful behavior
+        or the specific regression being fixed. Flag clearly redundant tests,
+        tests that merely mirror the implementation, and unnecessary test
+        scaffolding. Do not request unit tests solely to increase coverage or
+        insist that every small change needs new tests.
+        Keep added comments and docstrings brief and limited to non-obvious
+        intent or constraints. Flag excessive commentary that merely restates
+        the code; do not request comments for self-explanatory logic.
+        Do not suggest unrelated refactors, speculative defensive code, style-only
+        changes, or generic requests for tests, comments, or docstrings.
+        Do not repeat findings already covered by formatters or linters.
+        If there is no substantive issue, do not invent suggestions.
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: false
+  labeling:
+    auto_apply_labels: true
+    labeling_instructions:
+      - label: bug
+        instructions: >-
+          Reports of broken or incorrect existing Kite behavior, crashes, or
+          regressions. Do not apply to requests for new functionality or usage
+          questions without evidence of a defect.
+      - label: enhancement
+        instructions: >-
+          Requests for new Kite functionality or changes to existing behavior.
+          Do not apply when the issue only reports a defect or asks how to use
+          an existing feature.
+      - label: question
+        instructions: >-
+          Questions about using, deploying, or configuring Kite when no defect
+          or new feature is established.
+      - label: documentation
+        instructions: >-
+          Reports of missing, incorrect, outdated, or unclear Kite documentation.
+      # Create this repository label before enabling automatic labeling.
+      - label: needs-info
+        instructions: >-
+          The issue lacks information necessary to understand or investigate it.
+          For bug reports, require a concrete, minimal reproduction case with
+          relevant Kite and Kubernetes versions, environment and configuration,
+          initial state or prerequisites, ordered steps or exact commands, and
+          expected versus actual results. Include sample inputs, manifests,
+          logs, or errors when necessary to reproduce and verify the failure.
+          Reports of known or previously reported problems must still provide
+          an explicit reproduction procedure for the reported environment;
+          saying "known issue" or linking a similar issue alone is insufficient.
+          Apply this label when a maintainer cannot follow the provided case
+          without guessing essential steps or conditions. Do not invent missing
+          reproduction details or treat a suspected cause as a confirmed defect.
+          For feature requests, require a clear use case and desired outcome.
+          Do not apply merely because the issue is short, not written in English,
+          or omits details that are irrelevant to the problem.
+          This label may coexist with a category label; missing information alone
+          does not make an issue invalid or a duplicate.

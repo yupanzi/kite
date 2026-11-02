@@ -821,6 +821,7 @@
     "aiAgent": {
       "title": "AI Agent",
       "description": "启用 AI 助手，配置模型和接口地址。",
+      "managedByConfig": "AI 设置由配置文件管理，在此处只读。",
       "form": {
         "model": "模型",
         "apiKey": "API Key",
@@ -1448,7 +1449,6 @@
       "chartSourceArtifactHubVerifiedShort": "Artifact Hub（已验证）",
       "chartSourceArtifactHub": "当前使用 Artifact Hub Chart：{{repository}}。",
       "chartDetailsLink": "Chart 详情",
-      "chartSourceCurrentRelease": "当前使用 Release 中保存的 Chart。",
       "chartSourceSelectChart": "请选择要使用的 Chart 包。默认使用当前 Chart。",
       "newVersionAvailable": "新版本 {{version}}",
       "loadingChart": "正在加载 Chart...",

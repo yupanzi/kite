@@ -810,6 +810,7 @@
     "aiAgent": {
       "title": "AI Agent",
       "description": "Enable AI assistant and configure model endpoint.",
+      "managedByConfig": "AI settings are managed by the configuration file and are read-only here.",
       "form": {
         "model": "Model",
         "apiKey": "API Key",
@@ -1361,7 +1362,6 @@
       "chartSourceArtifactHubVerifiedShort": "Artifact Hub (verified)",
       "chartSourceArtifactHub": "Using Artifact Hub chart from {{repository}}.",
       "chartDetailsLink": "Chart details",
-      "chartSourceCurrentRelease": "Using the chart stored in the current release.",
       "chartSourceSelectChart": "Select a chart to use a different chart package. Defaults to the current chart.",
       "newVersionAvailable": "New {{version}}",
       "loadingChart": "Loading chart...",

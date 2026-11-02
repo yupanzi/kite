@@ -360,6 +360,7 @@ export interface APIKeyCreateRequest {
 export type AIEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
 export interface GeneralSetting {
+  aiManaged: boolean
   aiAgentEnabled: boolean
   aiProvider: 'openai' | 'anthropic'
   aiModel: string
